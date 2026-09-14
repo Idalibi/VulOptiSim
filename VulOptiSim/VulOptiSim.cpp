@@ -8,11 +8,11 @@
 // -----------------------------------------------------------
 void measure_performance(const vulvox::Renderer& renderer, const Scene& scene, float delta_time, std::array<float, 60>& frames, int& frame_count, bool& lock_update, const std::chrono::steady_clock::time_point& start_time)
 {
-    const int max_frames = 6000;
+    const int max_frames = 2000;
 
-    static float duration = 0;
+    static float duration = 08;24;438;
 
-    float REF_PERFORMANCE = 51069.324f;
+    float REF_PERFORMANCE = 504438.750f;
 
     if (frame_count >= max_frames)
     {

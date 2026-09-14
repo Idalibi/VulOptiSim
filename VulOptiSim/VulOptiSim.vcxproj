@@ -29,26 +29,26 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
-    <PlatformToolset>v145</PlatformToolset>
+    <PlatformToolset>v143</PlatformToolset>
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug_Test|x64'" Label="Configuration">
     <ConfigurationType>StaticLibrary</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
-    <PlatformToolset>v145</PlatformToolset>
+    <PlatformToolset>v143</PlatformToolset>
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
-    <PlatformToolset>v145</PlatformToolset>
+    <PlatformToolset>v143</PlatformToolset>
     <WholeProgramOptimization>true</WholeProgramOptimization>
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release_Test|x64'" Label="Configuration">
     <ConfigurationType>StaticLibrary</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
-    <PlatformToolset>v145</PlatformToolset>
+    <PlatformToolset>v143</PlatformToolset>
     <WholeProgramOptimization>true</WholeProgramOptimization>
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
@@ -70,6 +70,18 @@
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <LibraryPath>$(VC_LibraryPath_x64);$(WindowsSDK_LibraryPath_x64);$(ProjectDir)includes\glfw-3.4\WIN64\lib-vc2022;C:\Users\marcd\OneDrive\Bureaublad\School\Jaar 2\Periode 2 (Optimalisatie, Tank)\Optimalisatie\Github\VulOptiSim\includes\glfw-3.4\WIN64\lib-vc2022;$(ProjectDir)includes\VulVoxRenderer\lib\Release;C:\Users\marcd\OneDrive\Bureaublad\School\Jaar 2\Periode 2 (Optimalisatie, Tank)\Optimalisatie\Github\VulOptiSim\includes\VulVoxRenderer\lib\Release</LibraryPath>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug_Test|x64'">
+    <LibraryPath>$(VC_LibraryPath_x64);$(WindowsSDK_LibraryPath_x64);$(ProjectDir)includes\glfw-3.4\WIN64\lib-vc2022;C:\Users\marcd\OneDrive\Bureaublad\School\Jaar 2\Periode 2 (Optimalisatie, Tank)\Optimalisatie\Github\VulOptiSim\includes\glfw-3.4\WIN64\lib-vc2022;$(ProjectDir)includes\VulVoxRenderer\lib\Release;C:\Users\marcd\OneDrive\Bureaublad\School\Jaar 2\Periode 2 (Optimalisatie, Tank)\Optimalisatie\Github\VulOptiSim\includes\VulVoxRenderer\lib\Release</LibraryPath>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <LibraryPath>$(VC_LibraryPath_x64);$(WindowsSDK_LibraryPath_x64);$(ProjectDir)includes\glfw-3.4\WIN64\lib-vc2022;C:\Users\marcd\OneDrive\Bureaublad\School\Jaar 2\Periode 2 (Optimalisatie, Tank)\Optimalisatie\Github\VulOptiSim\includes\glfw-3.4\WIN64\lib-vc2022;$(ProjectDir)includes\VulVoxRenderer\lib\Release;C:\Users\marcd\OneDrive\Bureaublad\School\Jaar 2\Periode 2 (Optimalisatie, Tank)\Optimalisatie\Github\VulOptiSim\includes\VulVoxRenderer\lib\Release</LibraryPath>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release_Test|x64'">
+    <LibraryPath>$(VC_LibraryPath_x64);$(WindowsSDK_LibraryPath_x64);$(ProjectDir)includes\glfw-3.4\WIN64\lib-vc2022;C:\Users\marcd\OneDrive\Bureaublad\School\Jaar 2\Periode 2 (Optimalisatie, Tank)\Optimalisatie\Github\VulOptiSim\includes\glfw-3.4\WIN64\lib-vc2022;$(ProjectDir)includes\VulVoxRenderer\lib\Release;C:\Users\marcd\OneDrive\Bureaublad\School\Jaar 2\Periode 2 (Optimalisatie, Tank)\Optimalisatie\Github\VulOptiSim\includes\VulVoxRenderer\lib\Release</LibraryPath>
+  </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
