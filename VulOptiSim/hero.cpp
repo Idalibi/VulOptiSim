@@ -2,7 +2,7 @@
 #include "hero.h"
 
 Hero::Hero(const std::string& model, const std::string& texture, const Transform& transform, const std::string& name, const float speed)
-    : model(model), texture(texture), transform(transform), name(name), speed(speed)
+    : model(model), texture(texture), transform(transform), name(name), speed(speed) //Constructor
 {
 }
 

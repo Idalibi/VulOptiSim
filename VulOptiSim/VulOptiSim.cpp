@@ -12,7 +12,7 @@ void measure_performance(const vulvox::Renderer& renderer, const Scene& scene, f
 
     static float duration = 0;
 
-    float REF_PERFORMANCE = 51069.324f;
+    float REF_PERFORMANCE = 1596654.750f;//Mijn hemeltje lief wat was dit traag
 
     if (frame_count >= max_frames)
     {
