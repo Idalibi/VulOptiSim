@@ -1,5 +1,7 @@
 #include "pch.h"
 #include "scene.h"
+#include "SpatialGrid.h" 
+#include <algorithm>     
 
 Scene::Scene(vulvox::Renderer& renderer) : renderer(&renderer) //Constructor
 {
@@ -94,7 +96,8 @@ void Scene::spawn_heroes() //Deze is eenmalig
 
                 heroes.emplace_back("frieren-blob", "frieren-blob", hero_transform, "Frieren" + std::to_string(spawn_count), 20.f);
 
-                auto r = terrain.find_route(glm::uvec2(x, z), glm::uvec2(69 * terrain.tile_width, 160 * terrain.tile_width)); //Path finding
+                //Dit algoritme moet beter.
+                auto r = terrain.find_route(glm::uvec2(x, z), glm::uvec2(69 * terrain.tile_width, 160 * terrain.tile_width)); //Path finding (deze 9000 keer is wel een hele hoop. wellicht is het per spatial grid handiger of per groep, iets in die zin)
                 heroes.back().set_route(r);
             }
         }
@@ -157,47 +160,73 @@ void Scene::update(const float delta_time)
 
     renderer->set_view_matrix(camera.get_view_matrix());
 
-    //Make heroes collide with each other
-    for (size_t i = 0; i < heroes.size(); i++)// Lijst van heroes als o notatie O(n^2)
+    //Make heroes collide with each other (Nu geoptimaliseerd met Spatial Grid)
+    static SpatialGrid spatial_grid(40.0f); // LET OP: pas 40.0f aan naar ~2x de radius van je hero
+    spatial_grid.clear();
+
+    //Vul het grid
+    for (size_t i = 0; i < heroes.size(); ++i)
     {
-        if (!heroes[i].is_active())
+        if (heroes[i].is_active())
         {
-            continue;
+            spatial_grid.insert(i, heroes[i].get_position2d());
         }
-        
-        for (size_t j = i + 1; j < heroes.size(); j++) //O(aantal heroes(size lijst heroes)^2) Lijst van heros die met elkaar vergeleken worden.
+    }
+
+    //Handel botsingen af per cel
+    for (const auto& [cell_coord, cell_hero_indices] : spatial_grid.get_cells())
+    {
+        for (int dx = -1; dx <= 1; ++dx)
         {
-            if (!heroes[j].is_active()) //Waarom i=j? (zodat het niet met zichzelf checkt. Dit kan ook overgeslagen worden in de forloop denk ik door j = i + 1;(dit werkte van 4fps naar 8)
+            for (int dy = -1; dy <= 1; ++dy)
             {
-                continue;
-            }
+                SpatialGrid::CellCoord neighbor_coord = { cell_coord.first + dx, cell_coord.second + dy };
 
-            glm::vec2 position_i = heroes[i].get_position2d(); //Code leesbaarheid verbeterd maar nu nog optimaliseren
-            glm::vec2 position_j = heroes[j].get_position2d();
+                auto neighbor_it = spatial_grid.get_cells().find(neighbor_coord);
+                if (neighbor_it == spatial_grid.get_cells().end()) continue;
 
-            float col_rad_i = heroes[i].get_collision_radius();
-            float col_rad_j = heroes[j].get_collision_radius();
+                const auto& neighbor_hero_indices = neighbor_it->second;
 
-            //If the collision radii of the two heroes overlap, push them away
-            //Ik denk dat deze stiekem overbodig is maar ik probeer eerst deze beter te maken. (oke zonder deze code draait alles ineens naar 30 fps en wordt het steeds trager. na 2300 frames 14 fps nog maar dus ergens memory leak denk ik.
-            //Zonder dit stukje code kunnen ze door elkaar lopen. Dat mag niet lijkt me.
-            // NaN kan hier ook voorkomen omdat je misschien een 0 deelt door een getal. Dus dat moet ook opgelost worden.
-            if (circle_collision(position_i, col_rad_i, position_j, col_rad_j)) //Dit moet beter
-            {
-                glm::vec2 direction = position_j - position_i;
-                float distance = glm::length(direction);
-
-                if (distance > 0.0001f) //Voorkomt NaN(kan distance 0 zijn of is het absoluut? (onzeker kan het ook niet vinden denk ik)
+                for (size_t i : cell_hero_indices)
                 {
-                    glm::vec2 norm_direction = direction / distance;
-                    float overlap = (col_rad_i + col_rad_j) - distance;
+                    const glm::vec2 pos_i = heroes[i].get_position2d();
+                    const float rad_i = heroes[i].get_collision_radius();
 
-                    heroes[i].push(-norm_direction, overlap * 0.5f);//betere normalize dan de speciale glm::normalize(direction)
-                    heroes[j].push(norm_direction, overlap * 0.5f);
+                    for (size_t j : neighbor_hero_indices)
+                    {
+                        if (j <= i) continue; // Voorkom dubbele check en check met zichzelf
+
+                        const glm::vec2 pos_j = heroes[j].get_position2d();
+                        const float rad_j = heroes[j].get_collision_radius();
+
+                        const glm::vec2 direction = pos_j - pos_i;
+                        const float rad_sum = rad_i + rad_j;
+
+                        // Snelle afstand-check zonder wortel
+                        const float dist_sq = glm::dot(direction, direction);
+                        if (dist_sq >= rad_sum * rad_sum) continue;
+
+                        float distance = std::sqrt(dist_sq);
+                        glm::vec2 norm_direction;
+
+                        if (distance > 0.0001f)
+                        {
+                            norm_direction = direction / distance;
+                        }
+                        else
+                        {
+                            norm_direction = glm::vec2(1.0f, 0.0f);
+                            distance = 0.0001f;
+                        }
+
+                        const float overlap = rad_sum - distance;
+
+                        heroes[i].push(-norm_direction, overlap * 0.5f);
+                        heroes[j].push(norm_direction, overlap * 0.5f);
+                    }
                 }
-
             }
-        }// Dit moet worden vervangen voor Gridhashing of spacial hashing of spacial partitioning. Want je hoeft echt niet alle heros met elkaar te vergelijken maar alleen een aantal binnen een bepaald gebied.
+        }
     }
 
     for (auto& hero : heroes)
@@ -335,26 +364,80 @@ void Scene::show_mana_values() const
     ImGui::End();
 }
 
-std::vector<int> Scene::sort(const std::vector<int>& to_sort) const
-{
+std::vector<int> Scene::sort(const std::vector<int>& to_sort) const //Een sorteer algoritme, deze kan waarschijnlijk beter/geschikter BigO = O(n^2)
+{   
+    if (to_sort.empty()) return to_sort;
+
+    std::string sorteeralgoritme = "quick";
     std::vector<int> sorted_list = to_sort;
 
-    for (size_t i = 0; i < sorted_list.size(); i++)
-    {
-        int current_value = sorted_list.at(i);
+    if (sorteeralgoritme == "insert") {
+        //Orginele sorteeralgoritme: Insertion Sort
+        //summary
+        //  Dit algoritme pakt een element, checkt alle volgende elementen tot het element erna groter is dan het element dat het vast pakt en plaatst het ervoor.
+        //summary
 
-        //For all values before the current index,
-        //move all bigger values than current value one index forward
-        size_t j = i;
-        for (; j > 0 && sorted_list.at(j - 1) > current_value; j--)
+        for (size_t i = 0; i < sorted_list.size(); i++)
         {
-            sorted_list.at(j) = sorted_list.at(j - 1);
-        }
-        //Place the current value in the created gap
-        sorted_list.at(j) = current_value;
-    }
+            int current_value = sorted_list.at(i);
 
-    return sorted_list;
+            //For all values before the current index,
+            //move all bigger values than current value one index forward
+            size_t j = i;
+            for (; j > 0 && sorted_list.at(j - 1) > current_value; j--)
+            {
+                sorted_list.at(j) = sorted_list.at(j - 1);
+            }
+            //Place the current value in the created gap
+            sorted_list.at(j) = current_value;
+        }
+
+        return sorted_list;
+    }
+    else if (sorteeralgoritme == "quick") {
+        //summary
+        // Quick Sort of ... is een sorteeralgoritme dat een willekeurig (midden)punt pakt (pivot) 
+        // en de hogere elementen aan de ene kant plaatst en de lagere aan de andere kant.
+        // Deze is het snelst als de set al een beetje op volgorde is en het traagst als dat helemaal niet zo is.
+        //summary
+
+        // Zoek de kleinste en grootste waarde in de lijst
+        int min_val = to_sort[0]; //Kleinste
+        int max_val = to_sort[0]; //Grootste
+        for (int val : to_sort)
+        {
+            if (val < min_val) min_val = val;
+            if (val > max_val) max_val = val;
+        }
+
+        // Maak een frequentietabel aan (hoe vaak komt elke waarde voor?)
+        int range = max_val - min_val + 1;
+        std::vector<int> count(range, 0);
+
+        for (int val : to_sort)
+        {
+            count[val - min_val]++;
+        }
+
+        // Bouw de gesorteerde lijst op
+        std::vector<int> sorted_list;
+        sorted_list.reserve(to_sort.size());
+
+        for (int i = 0; i < range; ++i)
+        {
+            while (count[i] > 0)
+            {
+                sorted_list.push_back(i + min_val);
+                count[i]--;
+            }
+        }
+
+        return sorted_list;
+    }
+    else if (sorteeralgoritme == "bubble") {
+        return to_sort;
+    }
+    
 }
 
 void Scene::handle_input(const float delta_time)

@@ -164,6 +164,7 @@
     <ClCompile Include="scene.cpp" />
     <ClCompile Include="shield.cpp" />
     <ClCompile Include="hero.cpp" />
+    <ClCompile Include="SpatialGrid.cpp" />
     <ClCompile Include="sprite_animation.cpp" />
     <ClCompile Include="sprite_manager.cpp" />
     <ClCompile Include="terrain.cpp" />
@@ -180,6 +181,7 @@
     <ClInclude Include="scene.h" />
     <ClInclude Include="shield.h" />
     <ClInclude Include="hero.h" />
+    <ClInclude Include="SpatialGrid.h" />
     <ClInclude Include="sprite_animation.h" />
     <ClInclude Include="sprite_manager.h" />
     <ClInclude Include="terrain.h" />
