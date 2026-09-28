@@ -158,16 +158,16 @@ void Scene::update(const float delta_time)
     renderer->set_view_matrix(camera.get_view_matrix());
 
     //Make heroes collide with each other
-    for (size_t i = 0; i < heroes.size(); i++)// Lijst van heroes als o notatie
+    for (size_t i = 0; i < heroes.size(); i++)// Lijst van heroes als o notatie O(n^2)
     {
         if (!heroes[i].is_active())
         {
             continue;
         }
         
-        for (size_t j = 0; j < heroes.size(); j++) //O(aantal heroes(size lijst heroes)^2) Lijst van heros die met elkaar vergeleken worden.
+        for (size_t j = i + 1; j < heroes.size(); j++) //O(aantal heroes(size lijst heroes)^2) Lijst van heros die met elkaar vergeleken worden.
         {
-            if (i == j || !heroes[j].is_active()) //Waarom i=j? (zodat het niet met zichzelf checkt. Dit kan ook overgeslagen worden in de forloop denk ik door j = i + 1;
+            if (!heroes[j].is_active()) //Waarom i=j? (zodat het niet met zichzelf checkt. Dit kan ook overgeslagen worden in de forloop denk ik door j = i + 1;(dit werkte van 4fps naar 8)
             {
                 continue;
             }
@@ -179,11 +179,23 @@ void Scene::update(const float delta_time)
             float col_rad_j = heroes[j].get_collision_radius();
 
             //If the collision radii of the two heroes overlap, push them away
-            if (circle_collision(position_i, col_rad_i, position_j, col_rad_j))
+            //Ik denk dat deze stiekem overbodig is maar ik probeer eerst deze beter te maken. (oke zonder deze code draait alles ineens naar 30 fps en wordt het steeds trager. na 2300 frames 14 fps nog maar dus ergens memory leak denk ik.
+            //Zonder dit stukje code kunnen ze door elkaar lopen. Dat mag niet lijkt me.
+            // NaN kan hier ook voorkomen omdat je misschien een 0 deelt door een getal. Dus dat moet ook opgelost worden.
+            if (circle_collision(position_i, col_rad_i, position_j, col_rad_j)) //Dit moet beter
             {
                 glm::vec2 direction = position_j - position_i;
+                float distance = glm::length(direction);
 
-                heroes[j].push(glm::normalize(direction), (col_rad_i) - (glm::length(direction) / 2));
+                if (distance > 0.0001f) //Voorkomt NaN(kan distance 0 zijn of is het absoluut? (onzeker kan het ook niet vinden denk ik)
+                {
+                    glm::vec2 norm_direction = direction / distance;
+                    float overlap = (col_rad_i + col_rad_j) - distance;
+
+                    heroes[i].push(-norm_direction, overlap * 0.5f);//betere normalize dan de speciale glm::normalize(direction)
+                    heroes[j].push(norm_direction, overlap * 0.5f);
+                }
+
             }
         }// Dit moet worden vervangen voor Gridhashing of spacial hashing of spacial partitioning. Want je hoeft echt niet alle heros met elkaar te vergelijken maar alleen een aantal binnen een bepaald gebied.
     }
