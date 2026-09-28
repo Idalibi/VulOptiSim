@@ -13,7 +13,7 @@ Log* Log::get_instance()
 {
     if (!log_instance)
     {
-        log_instance = std::unique_ptr<Log>(new Log());
+        log_instance = std::unique_ptr<Log>(new Log()); //Smart pointer die een nieuwe log maakt, check of deze ook verwijdert moet worden of niet
     }
 
     return log_instance.get();

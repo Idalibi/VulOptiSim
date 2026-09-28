@@ -6,7 +6,7 @@ Hero::Hero(const std::string& model, const std::string& texture, const Transform
 {
 }
 
-void Hero::update(const float delta_time, const Terrain& terrain)
+void Hero::update(const float delta_time, const Terrain& terrain) //Gemiddelde tijd en een terrein van type terrein
 {
     if (!active)
     {
@@ -46,15 +46,15 @@ void Hero::update(const float delta_time, const Terrain& terrain)
             face_target(target_direction);
 
             //If next node is (nearly) reached, set target to next node
-            if (glm::length2(target - position) < terrain.tile_width)
+            if (glm::length2(target - position) < terrain.tile_width) //Check hoe deze werkt en waarom deze zo werkt
             {
                 route.pop_back();
             }
         }
     }
 
-    //Make sure we stay with the terrain bounds
-    if (terrain.in_bounds(position))
+    //Make sure we stay with(in) the terrain bounds
+    if (terrain.in_bounds(position)) //Set position2d wordt twee keer aangeroepen. Kan netter denk ik
     {
         transform.set_position2d(position);
     }
@@ -67,7 +67,7 @@ void Hero::update(const float delta_time, const Terrain& terrain)
     transform.set_height(terrain.get_height(position));
 }
 
-void Hero::set_route(const std::vector<glm::vec2>& new_route)
+void Hero::set_route(const std::vector<glm::vec2>& new_route) //Hier wordt waarschijnlijk een pathfinding algoritme gebruikt om dit pad te vergeven aan de hero
 {
     route = new_route;
 }

@@ -36,7 +36,7 @@ private:
 
     glm::dvec2 prev_mouse_pos;
 
-    std::vector<Hero> heroes;
+    std::vector<Hero> heroes; //Is dit de hoeveelheid heroes die bestaan? Lijkt t wel op
     std::vector<Magic_Staff> staves;
 
     std::vector<Lightning> active_lightning;

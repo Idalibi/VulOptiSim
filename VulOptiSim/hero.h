@@ -34,7 +34,7 @@ public:
     int get_health() const { return health; };
     int get_mana() const { return mana; };
 
-    bool is_active() const { return active; };
+    bool is_active() const { return active; }; //Wat betekend is active?
 
     std::string get_name() const { return name; };
 

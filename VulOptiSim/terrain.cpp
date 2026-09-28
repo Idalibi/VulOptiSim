@@ -1,7 +1,7 @@
 #include "pch.h"
 #include "terrain.h"
 
-Terrain::Terrain(const std::filesystem::path& path_to_height_map)
+Terrain::Terrain(const std::filesystem::path& path_to_height_map) //Constructor
 {
     std::vector<Tile_Data> map_data = read_map_file(path_to_height_map, map_width, map_length);
 
@@ -44,7 +44,7 @@ Terrain::Terrain(const std::filesystem::path& path_to_height_map)
 
                 voxel_transform = glm::scale(voxel_transform, glm::vec3(tile_width, tile_height, tile_length));
 
-                if (tile.tile_type & 1)
+                if (tile.tile_type & 1) //Dit kan beter door het getal gewoon mee te geven /2 of modelo (liever switch case denk ik)
                 {
                     texture_indices.push_back(0);
                 }
@@ -64,7 +64,7 @@ Terrain::Terrain(const std::filesystem::path& path_to_height_map)
 
             terrain_heights.emplace_back(height * tile_height);
 
-            if (tile.tile_type & 1)
+            if (tile.tile_type & 1) //switch case
             {
                 tile_types.push_back(Terrain_Types::Sea);
             }
@@ -108,6 +108,8 @@ float Terrain::get_height(const glm::vec2& position2d) const
 /// <summary>
 /// Uses a pathfinding algorithm to find the shortest path from given start_position to target_position.
 /// Note: Path is stored from end to start point.
+/// Huidige algoritme: Gebasseerd op ...
+/// Verwachting: Als dit algoritme maar 1 keer gebruikt word zou het geen bottleneck wezen. (is het nu denk ik wel)
 /// </summary>
 std::vector<glm::vec2> Terrain::find_route(const glm::vec2& start_position, const glm::vec2& target_position) const
 {
@@ -183,6 +185,7 @@ std::vector<glm::vec2> Terrain::reconstruct_path(const std::unordered_map<glm::i
 
 /// <summary>
 /// Returns a list of neighbours of a given node, if they exist and are accessible.
+/// Vraag: Is dit nodig?
 /// </summary>
 std::vector<glm::ivec2> Terrain::get_neighbours(const glm::ivec2& node) const
 {

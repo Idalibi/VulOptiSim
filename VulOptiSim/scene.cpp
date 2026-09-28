@@ -1,21 +1,24 @@
 #include "pch.h"
 #include "scene.h"
 
-Scene::Scene(vulvox::Renderer& renderer) : renderer(&renderer)
+Scene::Scene(vulvox::Renderer& renderer) : renderer(&renderer) //Constructor
 {
     glfwGetCursorPos(this->renderer->get_window(), &prev_mouse_pos.x, &prev_mouse_pos.y);
 
+    //Definieer de plek waar de camera moet komen
     glm::vec3 camera_pos{ -28.2815380f, 305.485260f, -30.0800228f };
     glm::vec3 camera_up{ 0.338442326f, 0.869414926f, 0.359964609f };
     glm::vec3 camera_direction{ 0.595541596f, -0.494082689f, 0.633413374f };
 
+    //Maak de camera aan
     camera = Camera(camera_pos, camera_up, camera_direction, 100.f, 100.f);
 
+    //Maak terein aan (check terrain path)
     terrain = Terrain(TERRAIN_PATH);
 
-    load_models_and_textures();
+    load_models_and_textures(); //Check van deze 3 functies waar ze hun info vandaan halen en hoe want dezen zijn traag)
 
-    spawn_heroes();
+    spawn_heroes(); //Deze is t ergst
 
     spawn_staves();
 
@@ -34,11 +37,11 @@ void Scene::load_models_and_textures() const
         CUBE_MOSS_TEXTURE_PATH }; //Floor
     renderer->load_texture_array("texture_array_test", texture_paths);
 
-    //NPCs
+    //NPCs (wat is dit Gert? en waarom staat dit op commentaar?)
     //renderer->load_model("konata", MODEL_PATH);
     //renderer->load_texture("konata", KONATA_MODAL_TEXTURE_PATH);
 
-    renderer->load_model("frieren-blob", FRIEREN_PATH);
+    renderer->load_model("frieren-blob", FRIEREN_PATH); //Path finding algoritme denk ik controlleren en verbeteren (de anderen ook)
     renderer->load_texture("frieren-blob", FRIEREN_TEXTURE_PATH);
 
     renderer->load_model("staff", STAFF_PATH);
@@ -56,7 +59,7 @@ void Scene::load_models_and_textures() const
     renderer->load_texture_array("fireball", FIREBALL_TEXTURE_PATHS);
 }
 
-void Scene::spawn_heroes()
+void Scene::spawn_heroes() //Deze is eenmalig
 {
     Transform hero_transform;
     hero_transform.rotation = glm::quatLookAt(glm::vec3(0.f, 0.f, 1.f), glm::vec3(0.f, 1.f, 0.f));
@@ -73,17 +76,17 @@ void Scene::spawn_heroes()
     std::cout << "Spawning characters and calculating routes..." << std::endl;
 
     int spawn_count = 0;
-    for (int s = 0; s < start_areas; s++)
+    for (int s = 0; s < start_areas; s++) //BigO : O(9000) oftewel O(1)
     {
-        float start_area_offset = static_cast<float>(s) * start_area_tile_offset * terrain.tile_width;
+        float start_area_offset = static_cast<float>(s) * start_area_tile_offset * terrain.tile_width; //O(start_areas) = 10 (draait dus start areas hoeveelheid keer)
 
-        for (int i = 0; i < 30; i++)
+        for (int i = 0; i < 30; i++) //O(30) O(start_area * 30)
         {
-            for (int j = 0; j < 30; j++)
+            for (int j = 0; j < 30; j++) //O(30) O start_area * 30 * 30) = O(start_area * 900)
             {
                 float x = start_corner_y + start_area_offset + ((float)i * spawn_offset);
                 float z = spawn_start_y + ((float)j * spawn_offset);
-                float y = terrain.get_height(glm::vec2(x, z));
+                float y = terrain.get_height(glm::vec2(x, z)); //Wel een zware functie denk ik (path finding)
 
                 hero_transform.position = glm::vec3(x, y, z);
 
@@ -91,7 +94,7 @@ void Scene::spawn_heroes()
 
                 heroes.emplace_back("frieren-blob", "frieren-blob", hero_transform, "Frieren" + std::to_string(spawn_count), 20.f);
 
-                auto r = terrain.find_route(glm::uvec2(x, z), glm::uvec2(69 * terrain.tile_width, 160 * terrain.tile_width));
+                auto r = terrain.find_route(glm::uvec2(x, z), glm::uvec2(69 * terrain.tile_width, 160 * terrain.tile_width)); //Path finding
                 heroes.back().set_route(r);
             }
         }
@@ -108,9 +111,9 @@ void Scene::spawn_staves()
     float spawn_offset_y = 40.f * terrain.tile_length;
 
     int spawn_count = 0;
-    for (int i = 0; i < 10; i++)
+    for (int i = 0; i < 10; i++) // O(10)
     {
-        for (int j = 0; j < 2; j++)
+        for (int j = 0; j < 2; j++) // O(2) = O(20)
         {
             spawn_count++;
             glm::vec3 position{ spawn_start.x + i * spawn_offset_x, height, spawn_start.y + j * spawn_offset_y };
@@ -155,28 +158,34 @@ void Scene::update(const float delta_time)
     renderer->set_view_matrix(camera.get_view_matrix());
 
     //Make heroes collide with each other
-    for (size_t i = 0; i < heroes.size(); i++)
+    for (size_t i = 0; i < heroes.size(); i++)// Lijst van heroes als o notatie
     {
         if (!heroes[i].is_active())
         {
             continue;
         }
-
-        for (size_t j = 0; j < heroes.size(); j++)
+        
+        for (size_t j = 0; j < heroes.size(); j++) //O(aantal heroes(size lijst heroes)^2) Lijst van heros die met elkaar vergeleken worden.
         {
-            if (i == j || !heroes[j].is_active())
+            if (i == j || !heroes[j].is_active()) //Waarom i=j? (zodat het niet met zichzelf checkt. Dit kan ook overgeslagen worden in de forloop denk ik door j = i + 1;
             {
                 continue;
             }
 
-            //If the collision radii of the two heroes overlap, push them away
-            if (circle_collision(heroes[i].get_position2d(), heroes[i].get_collision_radius(), heroes[j].get_position2d(), heroes[j].get_collision_radius()))
-            {
-                glm::vec2 direction = heroes[j].get_position2d() - heroes[i].get_position2d();
+            glm::vec2 position_i = heroes[i].get_position2d(); //Code leesbaarheid verbeterd maar nu nog optimaliseren
+            glm::vec2 position_j = heroes[j].get_position2d();
 
-                heroes[j].push(glm::normalize(direction), (heroes[i].get_collision_radius()) - (glm::length(direction) / 2));
+            float col_rad_i = heroes[i].get_collision_radius();
+            float col_rad_j = heroes[j].get_collision_radius();
+
+            //If the collision radii of the two heroes overlap, push them away
+            if (circle_collision(position_i, col_rad_i, position_j, col_rad_j))
+            {
+                glm::vec2 direction = position_j - position_i;
+
+                heroes[j].push(glm::normalize(direction), (col_rad_i) - (glm::length(direction) / 2));
             }
-        }
+        }// Dit moet worden vervangen voor Gridhashing of spacial hashing of spacial partitioning. Want je hoeft echt niet alle heros met elkaar te vergelijken maar alleen een aantal binnen een bepaald gebied.
     }
 
     for (auto& hero : heroes)
