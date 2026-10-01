@@ -117,6 +117,12 @@ std::vector<glm::vec2> Terrain::find_route_astar(const glm::vec2& start_position
     glm::ivec2 start_tile{ start_position.x / tile_width, start_position.y / tile_length }; //Beginpunt (x,y)
     glm::ivec2 target_tile{ target_position.x / tile_width, target_position.y / tile_length }; //vervolgpunt (x,y)
 
+    //Veiligheidcheck
+    if (start_tile.x < 0 || start_tile.x >= map_width || start_tile.y < 0 || start_tile.y >= map_length ||
+        target_tile.x < 0 || target_tile.x >= map_width || target_tile.y < 0 || target_tile.y >= map_length) {
+        return std::vector<glm::vec2>();
+    }
+
     std::queue<glm::ivec2> queue; //Een stack achtige lijst met first in first out regels (wachtrij)
     queue.push(start_tile); //stop de startplek als eerst in de stack lijst
 
@@ -152,12 +158,27 @@ std::vector<glm::vec2> Terrain::find_route_astar(const glm::vec2& start_position
 }
 
 //Alternatief path finding methode (A*).
-std::vector<glm::vec2> Terrain::find_route(const glm::vec2& start_position, const glm::vec2& target_position) const {
+std::vector<glm::vec2> Terrain::find_route(const glm::vec2& start_position, const glm::vec2& target_position) const
+{
+    glm::ivec2 start_tile{ static_cast<int>(start_position.x / tile_width), static_cast<int>(start_position.y / tile_length) };
+    glm::ivec2 target_tile{ static_cast<int>(target_position.x / tile_width), static_cast<int>(target_position.y / tile_length) };
 
-    glm::ivec2 start_tile{ start_position.x / tile_width, start_position.y / tile_length }; //Beginpunt (x,y)
-    glm::ivec2 target_tile{ target_position.x / tile_width, target_position.y / tile_length }; //Eindpunt (x,y)
+    // Veiligheidscheck op grenzen
+    if (start_tile.x < 0 || start_tile.x >= map_width || start_tile.y < 0 || start_tile.y >= map_length ||
+        target_tile.x < 0 || target_tile.x >= map_width || target_tile.y < 0 || target_tile.y >= map_length)
+    {
+        return {};
+    }
 
-    // lokaal struct om nodes te sorteren op totale kosten in de priority queue
+    int total_tiles = map_width * map_length;
+
+    // 1. Vervang unordered_map door platte vectoren (geen heap-allocatie chaos per stap!)
+    // -1.0f betekent "nog niet bezocht"
+    std::vector<float> g_costs(total_tiles, -1.0f);
+
+    // Slaat de parent index op per tegel (-1 is geen parent)
+    std::vector<int> parents(total_tiles, -1);
+
     struct Node {
         glm::ivec2 pos;
         float f_cost;
@@ -166,60 +187,63 @@ std::vector<glm::vec2> Terrain::find_route(const glm::vec2& start_position, cons
         }
     };
 
-    // Priority queue sorteert automatisch op de laagste f_cost
     std::priority_queue<Node, std::vector<Node>, std::greater<Node>> open_set;
 
-    //Houdt de gemaakte kosten g_cost per tegel bij
-    std::unordered_map<glm::ivec2, float> g_costs;
-
-    //Houdt de ouders bij net als BFS voor een reconstructie
-    std::unordered_map<glm::ivec2, glm::ivec2> parents;
-
-    //heuristieken omdat astar zo werkt(beetje hulp van ai voor de code hiervan)
     auto heuristic = [](const glm::ivec2& a, const glm::ivec2& b) {
         return static_cast<float>(std::abs(a.x - b.x) + std::abs(a.y - b.y));
-    };
+        };
 
+    int start_index = get_tile_index(start_tile.x, start_tile.y);
+    int target_index = get_tile_index(target_tile.x, target_tile.y);
 
+    g_costs[start_index] = 0.0f;
+    open_set.push({ start_tile, heuristic(start_tile, target_tile) });
+    parents[start_index] = start_index; // Startpunt verwijst naar zichzelf
 
-    //Startpunt instellen
-    g_costs[start_tile] = 0.0f;
-    float start_h = heuristic(start_tile, target_tile);
-    open_set.push({ start_tile , start_h });
-    parents[start_tile] = start_tile;
-
-    while (!open_set.empty()) {
-        //pak het meest belovende vakje (laagste f_cost)
+    while (!open_set.empty())
+    {
         glm::ivec2 current = open_set.top().pos;
-        open_set.pop(); //verwijder
+        open_set.pop();
 
-        if (current == target_tile) {
-            return reconstruct_path(parents, start_tile, current);
+        int current_index = get_tile_index(current.x, current.y);
+
+        if (current == target_tile)
+        {
+            // Reconstructie via de platte parents vector
+            std::vector<glm::vec2> path;
+            int curr_idx = target_index;
+
+            while (curr_idx != start_index)
+            {
+                int x = curr_idx % map_width;
+                int y = curr_idx / map_width;
+                path.emplace_back(static_cast<float>(x) * tile_width + tile_width / 2.f,
+                    static_cast<float>(y) * tile_length + tile_length / 2.f);
+                curr_idx = parents[curr_idx];
+                if (curr_idx == -1) break; // Veiligheidspartner
+            }
+            return path;
         }
 
-        //herbruik de getneighbours functie
-        std::vector<glm::ivec2> neighbours = get_neighbours(current);
+        for (const glm::ivec2& neighbour : get_neighbours(current))
+        {
+            int neighbour_index = get_tile_index(neighbour.x, neighbour.y);
+            float tentative_g_cost = g_costs[current_index] + 1.0f;
 
-        for (const glm::ivec2& neighbour : neighbours) {
-            float tentative_g_gcost = g_costs[current] + 1.0f;
-
-            if (!g_costs.contains(neighbour) || tentative_g_gcost < g_costs[neighbour]) {
-
-                g_costs[neighbour] = tentative_g_gcost;
-                float f_cost = tentative_g_gcost + heuristic(neighbour, target_tile);
+            // Als nog niet bezocht (-1) of een kortere route gevonden
+            if (g_costs[neighbour_index] < 0.0f || tentative_g_cost < g_costs[neighbour_index])
+            {
+                g_costs[neighbour_index] = tentative_g_cost;
+                float f_cost = tentative_g_cost + heuristic(neighbour, target_tile);
 
                 open_set.push({ neighbour, f_cost });
-                parents[neighbour] = current;
+                parents[neighbour_index] = current_index;
             }
         }
-
-
     }
 
-
-    return std::vector<glm::vec2>();
+    return {};
 }
-
 
 
 bool Terrain::in_bounds(const glm::vec2& position2d) const

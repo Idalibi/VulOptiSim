@@ -75,35 +75,75 @@ void Scene::spawn_heroes() //Deze is eenmalig
 
     float start_corner_y = 9.f * terrain.tile_width;
 
-    std::cout << "Spawning characters and calculating routes..." << std::endl;
+    std::cout << "Spawning characters and calculating routes...(met een threadpool hopelijk)" << std::endl;
 
-    int spawn_count = 0;
-    for (int s = 0; s < start_areas; s++) //BigO : O(9000) oftewel O(1)
-    {
-        float start_area_offset = static_cast<float>(s) * start_area_tile_offset * terrain.tile_width; //O(start_areas) = 10 (draait dus start areas hoeveelheid keer)
+    //initialiseer de threadpool
+    unsigned int num_threads = std::thread::hardware_concurrency();
+    ThreadPool pool(num_threads > 0 ? num_threads : 4);
 
-        for (int i = 0; i < 30; i++) //O(30) O(start_area * 30)
-        {
-            for (int j = 0; j < 30; j++) //O(30) O start_area * 30 * 30) = O(start_area * 900)
+    //wederom lokale hulp struct
+    struct SpawnedHeroInfo {
+        std::string mesh1, mesh2;
+        Transform transform;
+        std::string name;
+        float speed;
+        std::vector<glm::vec2> route;
+    };
+
+    //opslaan zodat we wachten tot alle groepen klaar zijn
+    std::vector<std::future<std::vector<SpawnedHeroInfo>>> futures;
+    futures.reserve(start_areas);
+
+    //Verdeel de 10 startgebieden over de threadpool
+    for (int s = 0; s < start_areas; s++) {
+
+        futures.push_back(pool.enqueue([=, this]() {
+            std::vector<SpawnedHeroInfo> local_heroes;
+            local_heroes.reserve(30 * 30);
+
+            float start_area_offset = static_cast<float>(s) * start_area_tile_offset * terrain.tile_width;
+            int local_spawn_count = s * 900; // voor unieke namen te behouden
+
+            for (int i = 0; i < 30; i++) //O(30) O(start_area * 30)
             {
-                float x = start_corner_y + start_area_offset + ((float)i * spawn_offset);
-                float z = spawn_start_y + ((float)j * spawn_offset);
-                float y = terrain.get_height(glm::vec2(x, z)); //Wel een zware functie denk ik (path finding)
+                for (int j = 0; j < 30; j++) //O(30) O start_area * 30 * 30) = O(start_area * 900)
+                {
+                    float x = start_corner_y + start_area_offset + ((float)i * spawn_offset);
+                    float z = spawn_start_y + ((float)j * spawn_offset);
+                    float y = terrain.get_height(glm::vec2(x, z)); //Wel een zware functie denk ik (path finding)
 
-                hero_transform.position = glm::vec3(x, y, z);
+                    Transform local_transform = hero_transform;
+                    local_transform.position = glm::vec3(x, y, z);
 
-                spawn_count++;
+                    local_spawn_count++;
 
-                heroes.emplace_back("frieren-blob", "frieren-blob", hero_transform, "Frieren" + std::to_string(spawn_count), 20.f);
 
-                //Dit algoritme moet beter. deze is taai
-                auto r = terrain.find_route(glm::uvec2(x, z), glm::uvec2(69 * terrain.tile_width, 160 * terrain.tile_width)); //Path finding (deze 9000 keer is wel een hele hoop. wellicht is het per spatial grid handiger of per groep, iets in die zin)
-                heroes.back().set_route(r);
+                    //Dit algoritme moet beter. deze is taai
+                    auto r = terrain.find_route(
+                        glm::vec2(x, z), 
+                        glm::vec2(69 * terrain.tile_width, 160 * terrain.tile_width)
+                    ); //Path finding (deze 9000 keer is wel een hele hoop. wellicht is het per spatial grid handiger of per groep, iets in die zin)
+                    local_heroes.push_back({ "frieren-blob", "frieren-blob", local_transform, "Frieren" + std::to_string(local_spawn_count), 20.f,r });
+
+                }
             }
-        }
+            return local_heroes;
+        }));
     }
 
-    Log::get_instance()->add_log("Spawned %d characters.\n", spawn_count);
+    int total_spawn_count = 0;
+    for (auto& f : futures) {
+        std::vector<SpawnedHeroInfo> area_heroes = f.get();
+        for (const auto& h : area_heroes) {
+            // GEBRUIK HIER h.transform IN PLAATS VAN DE ALGEMENE hero_transform!
+            heroes.emplace_back(h.mesh1, h.mesh2, h.transform, h.name, h.speed);
+            heroes.back().set_route(h.route);
+            total_spawn_count++;
+        }
+    }
+    Log::get_instance()->add_log("Spawned %d characters using ThreadPool.\n", total_spawn_count);
+    std::cout << "Spawning finished successfully!" << std::endl;
+
 }
 void Scene::spawn_staves()
 {
