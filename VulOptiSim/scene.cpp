@@ -20,9 +20,9 @@ Scene::Scene(vulvox::Renderer& renderer) : renderer(&renderer) //Constructor
 
     load_models_and_textures(); //Check van deze 3 functies waar ze hun info vandaan halen en hoe want dezen zijn traag)
 
-    spawn_heroes(); //Deze is t ergst
+    spawn_heroes(); //deze moet een ander sorteelalgoritme krijgen
 
-    spawn_staves();
+    spawn_staves(); //deze zorgt nu voor een hoop elende
 
     std::cout << "Scene loaded." << std::endl;
 }
@@ -96,7 +96,7 @@ void Scene::spawn_heroes() //Deze is eenmalig
 
                 heroes.emplace_back("frieren-blob", "frieren-blob", hero_transform, "Frieren" + std::to_string(spawn_count), 20.f);
 
-                //Dit algoritme moet beter.
+                //Dit algoritme moet beter. deze is taai
                 auto r = terrain.find_route(glm::uvec2(x, z), glm::uvec2(69 * terrain.tile_width, 160 * terrain.tile_width)); //Path finding (deze 9000 keer is wel een hele hoop. wellicht is het per spatial grid handiger of per groep, iets in die zin)
                 heroes.back().set_route(r);
             }
@@ -364,11 +364,37 @@ void Scene::show_mana_values() const
     ImGui::End();
 }
 
+void quick_sort_recursive(std::vector<int>& arr, int low, int high)
+{
+    if (low >= high) return;
+
+    // Kies het midden als pivot (voorkomt O(N^2) bij al gesorteerde data)
+    int pivot = arr[low + (high - low) / 2];
+    int i = low;
+    int j = high;
+
+    while (i <= j)
+    {
+        while (arr[i] < pivot) i++;
+        while (arr[j] > pivot) j--;
+
+        if (i <= j)
+        {
+            std::swap(arr[i], arr[j]);
+            i++;
+            j--;
+        }
+    }
+
+    if (low < j) quick_sort_recursive(arr, low, j);
+    if (i < high) quick_sort_recursive(arr, i, high);
+}
+
 std::vector<int> Scene::sort(const std::vector<int>& to_sort) const //Een sorteer algoritme, deze kan waarschijnlijk beter/geschikter BigO = O(n^2)
 {   
     if (to_sort.empty()) return to_sort;
 
-    std::string sorteeralgoritme = "quick";
+    std::string sorteeralgoritme = "counting";
     std::vector<int> sorted_list = to_sort;
 
     if (sorteeralgoritme == "insert") {
@@ -399,29 +425,38 @@ std::vector<int> Scene::sort(const std::vector<int>& to_sort) const //Een sortee
         // Quick Sort of ... is een sorteeralgoritme dat een willekeurig (midden)punt pakt (pivot) 
         // en de hogere elementen aan de ene kant plaatst en de lagere aan de andere kant.
         // Deze is het snelst als de set al een beetje op volgorde is en het traagst als dat helemaal niet zo is.
+        // Ook is dit algorite recursief wat het dus trager maakt dan bijvoorbeeld lineaire algoritmen.
+        //summary
+        quick_sort_recursive(sorted_list, 0, static_cast<int>(sorted_list.size()) - 1);
+        return sorted_list;
+    }
+    else if (sorteeralgoritme == "counting") {
+        //summary
+        // Counting Sort is een algoritme dat niet de waarden vergelijkt met elkaar maar door te tellen hoe vaak elke waarde voorkomt.
+        // Deze is lineair wat het wel een stuk sneller maakt dan vele anderen.
         //summary
 
         // Zoek de kleinste en grootste waarde in de lijst
-        int min_val = to_sort[0]; //Kleinste
-        int max_val = to_sort[0]; //Grootste
+        int min_val = to_sort[0]; //Minimum
+        int max_val = to_sort[0]; //Maximum
         for (int val : to_sort)
         {
             if (val < min_val) min_val = val;
             if (val > max_val) max_val = val;
         }
 
-        // Maak een frequentietabel aan (hoe vaak komt elke waarde voor?)
-        int range = max_val - min_val + 1;
-        std::vector<int> count(range, 0);
+        // Maak een frequentietabel (hoe vaak komt elke HP/Mana waarde voor?)
+        int range = max_val - min_val + 1; //hoeveel verschillende waarden komen er voor
+        std::vector<int> count(range, 0); //tel dezen
 
-        for (int val : to_sort)
+        for (int val : to_sort) //voor iedere waarde(val) in de ongesorteerde lijst
         {
-            count[val - min_val]++;
+            count[val - min_val]++; //tel 1 keer een unieke waarde
         }
 
         // Bouw de gesorteerde lijst op
-        std::vector<int> sorted_list;
-        sorted_list.reserve(to_sort.size());
+        //std::vector<int> sorted_list; //definieer nieuwe lijst
+        sorted_list.reserve(to_sort.size()); //De grootte van de lijst staat gelijk aan de aantal elementen van to_sort
 
         for (int i = 0; i < range; ++i)
         {
@@ -433,9 +468,6 @@ std::vector<int> Scene::sort(const std::vector<int>& to_sort) const //Een sortee
         }
 
         return sorted_list;
-    }
-    else if (sorteeralgoritme == "bubble") {
-        return to_sort;
     }
     
 }

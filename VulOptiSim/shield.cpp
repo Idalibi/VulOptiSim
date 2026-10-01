@@ -1,7 +1,7 @@
 #include "pch.h"
 #include "shield.h"
 
-Shield::Shield(const std::string& texture_array_name, const std::vector<Hero>& heroes)
+Shield::Shield(const std::string& texture_array_name, const std::vector<Hero>& heroes) //Constructor
     : texture_name(texture_array_name)
 {
     //Gather all hero positions if they have mana left
@@ -47,13 +47,13 @@ Shield::Shield(const std::string& texture_array_name, const std::vector<Hero>& h
     min_height = lowest_point;
     max_height = highest_point;
 
-    convex_hull_points = convex_hull(points_2d);
+    convex_hull_points = convex_hull(points_2d); //Alle punten van de convex hull of alleen de buitenste?
 
-    //Make the shield a bit larger so it doesn't clip the heroes
+    //Make the shield a bit larger so it doesn't clip the heroes (Klinkt goed laten we dat even controlleren)
     grow_from_centroid();
 }
 
-void Shield::draw(vulvox::Renderer* renderer) const
+void Shield::draw(vulvox::Renderer* renderer) const //Deze shield is een convex hull rondom alle Frieren heen. Zou deze beter kunnen? Ik denk t wel.
 {
     if (convex_hull_points.size() <= 1)
     {
@@ -237,12 +237,12 @@ glm::vec2 Shield::calculate_centroid()
     return sum / static_cast<float>(convex_hull_points.size());
 }
 
-void Shield::grow_from_centroid()
+void Shield::grow_from_centroid() //Vergroot de centroid zodat de shield niet in contact staat met de punten in de convexhull
 {
     //Push out the convex hull away from its centroid by a unit vector
     glm::vec2 centroid = calculate_centroid();
 
-    for (auto& convex_point : convex_hull_points)
+    for (auto& convex_point : convex_hull_points) //Door alle punten heen? Dat is best veel en best vaak (9000 keer iedere frame tenzij alleen de buitenste zijn)
     {
         glm::vec2 grow_vector = glm::normalize(convex_point - centroid);
         convex_point += 2.f * grow_vector;

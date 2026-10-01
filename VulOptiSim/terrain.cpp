@@ -108,27 +108,27 @@ float Terrain::get_height(const glm::vec2& position2d) const
 /// <summary>
 /// Uses a pathfinding algorithm to find the shortest path from given start_position to target_position.
 /// Note: Path is stored from end to start point.
-/// Huidige algoritme: Gebasseerd op ...
+/// Huidige algoritme: Een Breadth-First Search algoritme (best prima) wel traag voor langere paden omdat alle afstanden van punt 1 even lang blijven.
 /// Verwachting: Als dit algoritme maar 1 keer gebruikt word zou het geen bottleneck wezen. (is het nu denk ik wel)
+/// Andere suggesties voor search: DFS, Dijkstra, A*, Two-point Dijkstra/A*, (waarschijnlijk is a* het best door de extra euclidean of Manhanntan Distance)(parent node value + distance + heuristic)
 /// </summary>
-std::vector<glm::vec2> Terrain::find_route(const glm::vec2& start_position, const glm::vec2& target_position) const
+std::vector<glm::vec2> Terrain::find_route_astar(const glm::vec2& start_position, const glm::vec2& target_position) const
 {
-    glm::ivec2 start_tile{ start_position.x / tile_width, start_position.y / tile_length };
-    glm::ivec2 target_tile{ target_position.x / tile_width, target_position.y / tile_length };
+    glm::ivec2 start_tile{ start_position.x / tile_width, start_position.y / tile_length }; //Beginpunt (x,y)
+    glm::ivec2 target_tile{ target_position.x / tile_width, target_position.y / tile_length }; //vervolgpunt (x,y)
 
-    std::queue<glm::ivec2> queue;
-    queue.push(start_tile);
+    std::queue<glm::ivec2> queue; //Een stack achtige lijst met first in first out regels (wachtrij)
+    queue.push(start_tile); //stop de startplek als eerst in de stack lijst
 
-    std::unordered_set<glm::ivec2> visited;
-    visited.insert(start_tile);
+    //This hash map is used to track the parents in the shortest path of each visited node.
+    std::unordered_map<glm::ivec2, glm::ivec2> parents; 
 
-    //This hash map is used to track the parents in the shortest path of each visited node
-    std::unordered_map<glm::ivec2, glm::ivec2> parents;
+    parents[start_tile] = start_tile;
 
     while (!queue.empty())
     {
-        glm::ivec2 current = queue.front();
-        queue.pop();
+        glm::ivec2 current = queue.front(); //eerstvolgende punt
+        queue.pop(); //verwijder het voorste element uit de wachtrij
 
         if (current == target_tile)
         {
@@ -139,9 +139,8 @@ std::vector<glm::vec2> Terrain::find_route(const glm::vec2& start_position, cons
 
         for (const glm::ivec2& neighbour : neighbours)
         {
-            if (!visited.contains(neighbour))
+            if (!parents.contains(neighbour))
             {
-                visited.insert(neighbour);
                 parents[neighbour] = current;
                 queue.emplace(neighbour);
             }
@@ -151,6 +150,77 @@ std::vector<glm::vec2> Terrain::find_route(const glm::vec2& start_position, cons
     //Return empty list if we didn't reach the target position
     return std::vector<glm::vec2>();
 }
+
+//Alternatief path finding methode (A*).
+std::vector<glm::vec2> Terrain::find_route(const glm::vec2& start_position, const glm::vec2& target_position) const {
+
+    glm::ivec2 start_tile{ start_position.x / tile_width, start_position.y / tile_length }; //Beginpunt (x,y)
+    glm::ivec2 target_tile{ target_position.x / tile_width, target_position.y / tile_length }; //Eindpunt (x,y)
+
+    // lokaal struct om nodes te sorteren op totale kosten in de priority queue
+    struct Node {
+        glm::ivec2 pos;
+        float f_cost;
+        bool operator>(const Node& other) const {
+            return f_cost > other.f_cost;
+        }
+    };
+
+    // Priority queue sorteert automatisch op de laagste f_cost
+    std::priority_queue<Node, std::vector<Node>, std::greater<Node>> open_set;
+
+    //Houdt de gemaakte kosten g_cost per tegel bij
+    std::unordered_map<glm::ivec2, float> g_costs;
+
+    //Houdt de ouders bij net als BFS voor een reconstructie
+    std::unordered_map<glm::ivec2, glm::ivec2> parents;
+
+    //heuristieken omdat astar zo werkt(beetje hulp van ai voor de code hiervan)
+    auto heuristic = [](const glm::ivec2& a, const glm::ivec2& b) {
+        return static_cast<float>(std::abs(a.x - b.x) + std::abs(a.y - b.y));
+    };
+
+
+
+    //Startpunt instellen
+    g_costs[start_tile] = 0.0f;
+    float start_h = heuristic(start_tile, target_tile);
+    open_set.push({ start_tile , start_h });
+    parents[start_tile] = start_tile;
+
+    while (!open_set.empty()) {
+        //pak het meest belovende vakje (laagste f_cost)
+        glm::ivec2 current = open_set.top().pos;
+        open_set.pop(); //verwijder
+
+        if (current == target_tile) {
+            return reconstruct_path(parents, start_tile, current);
+        }
+
+        //herbruik de getneighbours functie
+        std::vector<glm::ivec2> neighbours = get_neighbours(current);
+
+        for (const glm::ivec2& neighbour : neighbours) {
+            float tentative_g_gcost = g_costs[current] + 1.0f;
+
+            if (!g_costs.contains(neighbour) || tentative_g_gcost < g_costs[neighbour]) {
+
+                g_costs[neighbour] = tentative_g_gcost;
+                float f_cost = tentative_g_gcost + heuristic(neighbour, target_tile);
+
+                open_set.push({ neighbour, f_cost });
+                parents[neighbour] = current;
+            }
+        }
+
+
+    }
+
+
+    return std::vector<glm::vec2>();
+}
+
+
 
 bool Terrain::in_bounds(const glm::vec2& position2d) const
 {

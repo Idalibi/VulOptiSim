@@ -19,6 +19,8 @@ public:
     float get_height(const glm::vec2& position2d) const;
 
     std::vector<glm::vec2> find_route(const glm::vec2& start_position, const glm::vec2& target_position) const;
+    std::vector<glm::vec2> find_route_astar(const glm::vec2& start_position, const glm::vec2& target_position) const;
+
 
     bool in_bounds(const glm::vec2& position2d) const;
     void clamp_to_bounds(glm::vec2& position2d) const;
