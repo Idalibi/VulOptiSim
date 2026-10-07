@@ -12,9 +12,10 @@ void measure_performance(const vulvox::Renderer& renderer, const Scene& scene, f
     float ORIGINAL_REF_PERFORMANCE = 1596654.750f;//Mijn hemeltje lief wat was dit traag
     static std::string original_duration = "Onbekend";
 
-    static float duration = 5.11; //Minuut,seconde(milisec: 5:11:624)
-    static float last_speedup = 5.1;
-    float REF_PERFORMANCE = 311624.719f; //Dit is al 2 keer zo goed op zn minst denk ik.
+    static float duration = 3.59; //Minuut,seconde(milisec: 3:59:233)
+    static float last_speedup = 1.3;
+    float REF_PERFORMANCE = 239233.250f; //Dit is al 2 keer zo goed op zn minst denk ik. (nu alles fuulscreen ipv het kleine scherm)
+    float kleinScherm_REF_PERFORMANCE = 203008.547f; //alsnog een 1.2 speedup bovenop de fullscreen (wel logisch)
 
     if (frame_count >= max_frames)
     {

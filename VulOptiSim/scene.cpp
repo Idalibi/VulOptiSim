@@ -2,6 +2,8 @@
 #include "scene.h"
 #include "SpatialGrid.h" 
 #include <algorithm>     
+#include <array>
+#include <cstdio>
 
 Scene::Scene(vulvox::Renderer& renderer) : renderer(&renderer) //Constructor
 {
@@ -308,6 +310,7 @@ void Scene::draw()
     //  Make sure the data needed for drawing (position etc.) is ready before calling the corresponding draw functions or weird things happen.
     //  Calling draw functions outside of this functions lifetime will crash the program!
 
+
     for (const auto& hero : heroes)
     {
         hero.draw(renderer);
@@ -338,6 +341,8 @@ void Scene::draw()
 
     shield.draw(renderer);
 
+
+
     show_health_values();
     show_mana_values();
 
@@ -346,63 +351,101 @@ void Scene::draw()
     show_controls();
 }
 
+namespace
+{
+    constexpr int    MAX_STAT = 1000;       // Health en mana lopen van 0 t/m 1000
+    constexpr double REFRESH_INTERVAL = 0.25; // Hoe vaak (in seconden) de lijst opnieuw gesorteerd wordt
+
+    struct StatCache
+    {
+        std::vector<int> sorted;
+        double last_update = -1.0;
+    };
+
+    // Counting sort op een vaste range: O(n + 1000), geen vergelijkingen nodig.
+    template <typename Getter>
+    void rebuild_sorted(const std::vector<Hero>& heroes, Getter get_value, std::vector<int>& out)
+    {
+        std::array<int, MAX_STAT + 1> counts{}; // Alles op 0
+
+        for (const auto& h : heroes)
+        {
+            if (!h.is_active()) continue;
+            ++counts[std::clamp(get_value(h), 0, MAX_STAT)];
+        }
+
+        out.clear();
+        out.reserve(heroes.size());
+        for (int v = 0; v <= MAX_STAT; ++v)
+        {
+            out.insert(out.end(), static_cast<size_t>(counts[v]), v);
+        }
+    }
+
+    // Gedeelde tekenfunctie voor het health- en mana-venster
+    template <typename Getter>
+    void draw_stat_window(const char* title, const ImVec4& color,
+        const std::vector<Hero>& heroes, Getter get_value, StatCache& cache)
+    {
+        // Als het venster dicht of ingeklapt is, sla alle berekeningen over
+        if (!ImGui::Begin(title))
+        {
+            ImGui::End();
+            return;
+        }
+
+        // Alleen opnieuw sorteren als de cache oud genoeg is
+        const double now = ImGui::GetTime();
+        if (now - cache.last_update >= REFRESH_INTERVAL)
+        {
+            rebuild_sorted(heroes, get_value, cache.sorted);
+            cache.last_update = now;
+        }
+
+        ImGui::PushStyleColor(ImGuiCol_PlotHistogram, color);
+
+        // Virtual scrolling: alleen de zichtbare balkjes worden getekend
+        ImGuiListClipper clipper;
+        clipper.Begin(static_cast<int>(cache.sorted.size()));
+
+        char buf[32]; // Stackbuffer, geen stringstream
+        while (clipper.Step())
+        {
+            for (int i = clipper.DisplayStart; i < clipper.DisplayEnd; ++i)
+            {
+                const int value = cache.sorted[i];
+                snprintf(buf, sizeof(buf), "%d/%d", value, MAX_STAT);
+                ImGui::ProgressBar(static_cast<float>(value) / MAX_STAT, ImVec2(-FLT_MIN, 0.0f), buf);
+            }
+        }
+
+        ImGui::PopStyleColor(1);
+        ImGui::End();
+    }
+}
+
 /// <summary>
-/// Sorts all health values and displays them in a window.
+/// Shows all active heroes' health values, sorted, in a window (cached, with virtual scrolling).
 /// </summary>
 void Scene::show_health_values() const
 {
-    std::vector<int> health_values;
-    for (const auto& h : heroes)
-    {
-        health_values.push_back(h.get_health());
-    }
-
-    health_values = sort(health_values);
-
-    ImGui::Begin("Heroes Health Bars");
-
-    ImGui::PushItemWidth(ImGui::GetWindowWidth() * 0.90f);
-    ImGui::PushStyleColor(ImGuiCol_PlotHistogram, { 0.f, 0.5f, 0.f, 1.0f }); //Green
-    for (const int& hp : health_values)
-    {
-        std::stringstream hp_text;
-        hp_text << hp << "/" << 1000;
-        ImGui::ProgressBar((float)hp / 1000, ImVec2(-FLT_MIN, 0.0f), hp_text.str().c_str());
-    }
-    ImGui::PopStyleColor(1);
-    ImGui::SameLine(0.0f, ImGui::GetStyle().ItemInnerSpacing.x);
-
-    ImGui::End();
+    static StatCache cache;
+    draw_stat_window("Heroes Health Bars", ImVec4(0.0f, 0.5f, 0.0f, 1.0f),
+        heroes, [](const Hero& h) { return h.get_health(); }, cache);
 }
 
 /// <summary>
-/// Sorts all mana values and displays them in a window.
+/// Shows all active heroes' mana values, sorted, in a window (cached, with virtual scrolling).
 /// </summary>
 void Scene::show_mana_values() const
 {
-    std::vector<int> mana_values;
-    for (const auto& s : heroes)
-    {
-        mana_values.push_back(s.get_mana());
-    }
-
-    mana_values = sort(mana_values);
-
-    ImGui::Begin("Heroes Mana Bars");
-
-    ImGui::PushItemWidth(ImGui::GetWindowWidth() * 0.90f);
-    ImGui::PushStyleColor(ImGuiCol_PlotHistogram, { 0.f, 0.f, 0.5f, 1.0f }); //Blue
-    for (const int& mana : mana_values)
-    {
-        std::stringstream mana_text;
-        mana_text << mana << "/" << 1000;
-        ImGui::ProgressBar((float)mana / 1000, ImVec2(-FLT_MIN, 0.0f), mana_text.str().c_str());
-    }
-    ImGui::PopStyleColor(1);
-    ImGui::SameLine(0.0f, ImGui::GetStyle().ItemInnerSpacing.x);
-
-    ImGui::End();
+    static StatCache cache;
+    draw_stat_window("Heroes Mana Bars", ImVec4(0.0f, 0.0f, 0.5f, 1.0f),
+        heroes, [](const Hero& h) { return h.get_mana(); }, cache);
 }
+
+
+
 
 void quick_sort_recursive(std::vector<int>& arr, int low, int high)
 {
@@ -496,6 +539,7 @@ std::vector<int> Scene::sort(const std::vector<int>& to_sort) const //Een sortee
 
         // Bouw de gesorteerde lijst op
         //std::vector<int> sorted_list; //definieer nieuwe lijst
+        sorted_list.clear();
         sorted_list.reserve(to_sort.size()); //De grootte van de lijst staat gelijk aan de aantal elementen van to_sort
 
         for (int i = 0; i < range; ++i)
@@ -509,7 +553,8 @@ std::vector<int> Scene::sort(const std::vector<int>& to_sort) const //Een sortee
 
         return sorted_list;
     }
-    
+    return sorted_list;
+
 }
 
 void Scene::handle_input(const float delta_time)
