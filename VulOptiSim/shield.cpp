@@ -1,5 +1,15 @@
 #include "pch.h"
 #include "shield.h"
+#include <algorithm>
+
+namespace
+{
+    // > 0: c ligt links van a->b, < 0: rechts, 0: op één lijn
+    inline float cross2(const glm::vec2& a, const glm::vec2& b, const glm::vec2& c)
+    {
+        return (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+    }
+}
 
 Shield::Shield(const std::string& texture_array_name, const std::vector<Hero>& heroes) //Constructor
     : texture_name(texture_array_name)
@@ -104,7 +114,81 @@ void Shield::draw(vulvox::Renderer* renderer) const //Deze shield is een convex 
     renderer->draw_planes(texture_name, transforms, texture_indices, uvs);
 }
 
+//Het nieuwe algoritme voor de convex hull. Gebasseerd op monotone chain.
 std::vector<glm::vec2> Shield::convex_hull(std::vector<glm::vec2> all_points) const
+{
+    if (all_points.size() < 3)
+    {
+        return all_points;
+    }
+
+    //Gooi punten weg die zeker binnen de hull liggen. (alles binnen de 4 uitersten) (Akl-Toussaint) ---
+    glm::vec2 left = all_points[0], bottom = left, right = left, top = left;
+    for (const glm::vec2& p : all_points)
+    {
+        if (p.x < left.x)   left = p;
+        if (p.y < bottom.y) bottom = p;
+        if (p.x > right.x)  right = p;
+        if (p.y > top.y)    top = p;
+    }
+
+    std::vector<glm::vec2> candidates;
+    candidates.reserve(all_points.size() / 8 + 16);
+    for (const glm::vec2& p : all_points)
+    {
+        // Strikt binnen de vierhoek links -> onder -> rechts -> boven (tegen de klok in)
+        const bool strictly_inside =
+            cross2(left, bottom, p) > 0.f && cross2(bottom, right, p) > 0.f &&
+            cross2(right, top, p) > 0.f && cross2(top, left, p) > 0.f;
+
+        if (!strictly_inside)
+        {
+            candidates.push_back(p);
+        }
+    }
+
+    //Andrew's monotone chain op de overgebleven punten ---
+    std::sort(candidates.begin(), candidates.end(), [](const glm::vec2& a, const glm::vec2& b)
+        {
+            return a.x < b.x || (a.x == b.x && a.y < b.y);
+        });
+    candidates.erase(std::unique(candidates.begin(), candidates.end()), candidates.end());
+
+    if (candidates.size() < 3)
+    {
+        return candidates;
+    }
+
+    std::vector<glm::vec2> hull(2 * candidates.size());
+    size_t k = 0;
+
+    //Onderste hull
+    for (size_t i = 0; i < candidates.size(); ++i)
+    {
+        while (k >= 2 && cross2(hull[k - 2], hull[k - 1], candidates[i]) <= 0.f) --k;
+        hull[k++] = candidates[i];
+    }
+
+    //Bovenste hull
+    for (size_t i = candidates.size() - 1, t = k + 1; i > 0; --i)
+    {
+        while (k >= t && cross2(hull[k - 2], hull[k - 1], candidates[i - 1]) <= 0.f) --k;
+        hull[k++] = candidates[i - 1];
+    }
+
+    hull.resize(k - 1); // Het laatste punt is gelijk aan het eerste
+
+    //Zelfde draairichting als de oude Jarvis-march (die vertrouwde op orientation())
+    if (hull.size() >= 3 && orientation(hull[0], hull[1], hull[2]) < 0.f)
+    {
+        std::reverse(hull.begin() + 1, hull.end());
+    }
+
+    return hull;
+}
+
+//Het oude gift wrapping convex hull algoritme. Deze wordt vervangen door een ander.
+std::vector<glm::vec2> Shield::convex_hull_gift_wrapping (std::vector<glm::vec2> all_points) const
 {
     all_points.erase(std::ranges::unique(all_points, [](const glm::vec2& a, const glm::vec2& b)
         {

@@ -9,6 +9,7 @@ public:
     void draw(vulvox::Renderer* renderer) const;
 
     std::vector<glm::vec2> convex_hull(std::vector<glm::vec2> points) const;
+    std::vector<glm::vec2> convex_hull_gift_wrapping(std::vector<glm::vec2> all_points) const;
 
     bool intersects(const glm::vec2& circle_center, float radius) const;
     void absorb(std::vector<Hero>& heroes, glm::vec2 point) const;

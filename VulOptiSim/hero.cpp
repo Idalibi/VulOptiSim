@@ -33,7 +33,9 @@ void Hero::update(const float delta_time, const Terrain& terrain) //Gemiddelde t
             //Prevent overshooting by checking the remaining distance
             if (distance_to_target - distance > 0.0001f)
             {
-                position += distance * glm::normalize(target_direction);
+                //position += distance * glm::normalize(target_direction);
+                //verwisselt met:    (vanwege de wortels en kans op delen door 0)
+                position += (distance / distance_to_target) * target_direction;
                 distance = 0.f;
             }
             else
