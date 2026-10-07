@@ -202,70 +202,82 @@ void Scene::update(const float delta_time)
 
     renderer->set_view_matrix(camera.get_view_matrix());
 
-    //Make heroes collide with each other (Nu geoptimaliseerd met Spatial Grid)
-    static SpatialGrid spatial_grid(40.0f); // LET OP: pas 40.0f aan naar ~2x de radius van je hero
+    //Make heroes collide with each other (Spatial Grid, half-stencil)
+    static SpatialGrid spatial_grid(5.0f); // LET OP: pas 40.0f aan naar ~2x de radius van je hero //20 maakte het een heel stuk sneller op begin (45 fps eerst wtff) (later werd het + - 25) (radius is 0.5f;)
     spatial_grid.clear();
 
-    //Vul het grid
+    //Posities en radii één keer per frame in compacte arrays (cache-vriendelijk)
+    static std::vector<glm::vec2> positions;
+    static std::vector<float> radii;
+    positions.resize(heroes.size());
+    radii.resize(heroes.size());
+
     for (size_t i = 0; i < heroes.size(); ++i)
     {
         if (heroes[i].is_active())
         {
-            spatial_grid.insert(i, heroes[i].get_position2d());
+            positions[i] = heroes[i].get_position2d();
+            radii[i] = heroes[i].get_collision_radius();
+            spatial_grid.insert(i, positions[i]);
         }
     }
 
-    //Handel botsingen af per cel
-    for (const auto& [cell_coord, cell_hero_indices] : spatial_grid.get_cells())
-    {
-        for (int dx = -1; dx <= 1; ++dx)
+    //Los één botsend paar op
+    auto resolve_pair = [&](size_t i, size_t j)
         {
-            for (int dy = -1; dy <= 1; ++dy)
+            const glm::vec2 direction = positions[j] - positions[i];
+            const float rad_sum = radii[i] + radii[j];
+
+            // Snelle afstand-check zonder wortel
+            const float dist_sq = glm::dot(direction, direction);
+            if (dist_sq >= rad_sum * rad_sum) return;
+
+            float distance = std::sqrt(dist_sq);
+            glm::vec2 norm_direction;
+
+            if (distance > 0.0001f)
             {
-                SpatialGrid::CellCoord neighbor_coord = { cell_coord.first + dx, cell_coord.second + dy };
+                norm_direction = direction / distance;
+            }
+            else
+            {
+                norm_direction = glm::vec2(1.0f, 0.0f);
+                distance = 0.0001f;
+            }
 
-                auto neighbor_it = spatial_grid.get_cells().find(neighbor_coord);
-                if (neighbor_it == spatial_grid.get_cells().end()) continue;
+            const float overlap = rad_sum - distance;
 
-                const auto& neighbor_hero_indices = neighbor_it->second;
+            heroes[i].push(-norm_direction, overlap * 0.5f);
+            heroes[j].push(norm_direction, overlap * 0.5f);
+        };
 
-                for (size_t i : cell_hero_indices)
+    //Alleen 4 van de 8 buren: elk celpaar wordt zo precies één keer bezocht
+    static const std::array<std::pair<int, int>, 4> half_neighbors{ { {1, 0}, {-1, 1}, {0, 1}, {1, 1} } };
+
+    const auto& cells = spatial_grid.get_cells();
+    for (const auto& [cell_coord, cell_hero_indices] : cells)
+    {
+        //Paren binnen dezelfde cel
+        for (size_t a = 0; a < cell_hero_indices.size(); ++a)
+        {
+            for (size_t b = a + 1; b < cell_hero_indices.size(); ++b)
+            {
+                resolve_pair(cell_hero_indices[a], cell_hero_indices[b]);
+            }
+        }
+
+        //Paren met de 4 "voorwaartse" buurcellen
+        for (const auto& [dx, dy] : half_neighbors)
+        {
+            SpatialGrid::CellCoord neighbor_coord = { cell_coord.first + dx, cell_coord.second + dy };
+            auto neighbor_it = cells.find(neighbor_coord);
+            if (neighbor_it == cells.end()) continue;
+
+            for (size_t i : cell_hero_indices)
+            {
+                for (size_t j : neighbor_it->second)
                 {
-                    const glm::vec2 pos_i = heroes[i].get_position2d();
-                    const float rad_i = heroes[i].get_collision_radius();
-
-                    for (size_t j : neighbor_hero_indices)
-                    {
-                        if (j <= i) continue; // Voorkom dubbele check en check met zichzelf
-
-                        const glm::vec2 pos_j = heroes[j].get_position2d();
-                        const float rad_j = heroes[j].get_collision_radius();
-
-                        const glm::vec2 direction = pos_j - pos_i;
-                        const float rad_sum = rad_i + rad_j;
-
-                        // Snelle afstand-check zonder wortel
-                        const float dist_sq = glm::dot(direction, direction);
-                        if (dist_sq >= rad_sum * rad_sum) continue;
-
-                        float distance = std::sqrt(dist_sq);
-                        glm::vec2 norm_direction;
-
-                        if (distance > 0.0001f)
-                        {
-                            norm_direction = direction / distance;
-                        }
-                        else
-                        {
-                            norm_direction = glm::vec2(1.0f, 0.0f);
-                            distance = 0.0001f;
-                        }
-
-                        const float overlap = rad_sum - distance;
-
-                        heroes[i].push(-norm_direction, overlap * 0.5f);
-                        heroes[j].push(norm_direction, overlap * 0.5f);
-                    }
+                    resolve_pair(i, j);
                 }
             }
         }
@@ -313,6 +325,7 @@ void Scene::draw()
 
     for (const auto& hero : heroes)
     {
+        if (!hero.is_active()) continue;
         hero.draw(renderer);
     }
 

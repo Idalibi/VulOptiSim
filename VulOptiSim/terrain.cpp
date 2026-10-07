@@ -27,6 +27,13 @@ Terrain::Terrain(const std::filesystem::path& path_to_height_map) //Constructor
         }
     }
 
+    // NIEUW: hoogte van een kolom in voxels (zelfde berekening als hieronder); buiten de kaart = 0
+    auto column_height = [&](int cx, int cz) -> int
+        {
+            if (cx < 0 || cx >= map_width || cz < 0 || cz >= map_length) return 0;
+            return map_data[(cz * map_width) + cx].height - lowest + 1;
+        };
+
     for (int z = 0; z < map_length; z++)
     {
         for (int x = 0; x < map_width; x++)
@@ -34,17 +41,23 @@ Terrain::Terrain(const std::filesystem::path& path_to_height_map) //Constructor
             const Tile_Data& tile = map_data[(z * map_width) + x];
             int height = tile.height - lowest + 1;
 
-            for (int y = 0; y < height; y++)
+            // NIEUW: alleen voxels maken die van buiten zichtbaar zijn: de bovenste, plus alle voxels
+            // waarvan een buurkolom lager is (zijkant vrij). Alles daaronder zit ingesloten.
+            const int lowest_neighbour = std::min({ column_height(x - 1, z), column_height(x + 1, z),
+                                                    column_height(x, z - 1), column_height(x, z + 1) });
+            const int first_visible = std::min(lowest_neighbour, height - 1);
+
+            for (int y = first_visible; y < height; y++)   // WAS: for (int y = 0; y < height; y++)
             {
                 glm::mat4& voxel_transform = terrain_transforms.emplace_back(1.0f);
                 voxel_transform = glm::translate(voxel_transform,
                     glm::vec3(x * tile_width + tile_width / 2,
-                        ((float)y + 0.5f) * tile_height, 
+                        ((float)y + 0.5f) * tile_height,
                         z * tile_length + tile_width / 2));
 
                 voxel_transform = glm::scale(voxel_transform, glm::vec3(tile_width, tile_height, tile_length));
 
-                if (tile.tile_type & 1) //Dit kan beter door het getal gewoon mee te geven /2 of modelo (liever switch case denk ik)
+                if (tile.tile_type & 1)
                 {
                     texture_indices.push_back(0);
                 }
@@ -64,7 +77,7 @@ Terrain::Terrain(const std::filesystem::path& path_to_height_map) //Constructor
 
             terrain_heights.emplace_back(height * tile_height);
 
-            if (tile.tile_type & 1) //switch case
+            if (tile.tile_type & 1)
             {
                 tile_types.push_back(Terrain_Types::Sea);
             }
@@ -83,6 +96,8 @@ Terrain::Terrain(const std::filesystem::path& path_to_height_map) //Constructor
         }
     }
 
+    // NIEUW (tijdelijk): zie hoeveel voxels er over zijn. Vergelijk met de waarde van vóór je wijziging.
+    std::cout << "Terrain voxels: " << terrain_transforms.size() << std::endl;
 }
 
 void Terrain::draw(vulvox::Renderer* renderer) const
