@@ -48,6 +48,9 @@ void Scene::load_models_and_textures() const
     renderer->load_model("frieren-blob", FRIEREN_PATH); //Path finding algoritme denk ik controlleren en verbeteren (de anderen ook)
     renderer->load_texture("frieren-blob", FRIEREN_TEXTURE_PATH);
 
+    std::vector<std::filesystem::path> frieren_texture{ FRIEREN_TEXTURE_PATH };
+    renderer->load_texture_array("frieren-blob-array", frieren_texture);
+
     renderer->load_model("staff", STAFF_PATH);
     renderer->load_texture("staff", STAFF_TEXTURE_PATH);
 
@@ -322,12 +325,21 @@ void Scene::draw()
     //  Make sure the data needed for drawing (position etc.) is ready before calling the corresponding draw functions or weird things happen.
     //  Calling draw functions outside of this functions lifetime will crash the program!
 
+    ///Nieuw
+    static std::vector<glm::mat4> hero_matrices;
+    static std::vector<uint32_t> hero_texture_indices; // zelfde type als texture_indices in terrain.h
+    hero_matrices.clear();
+    hero_texture_indices.clear();
 
     for (const auto& hero : heroes)
     {
         if (!hero.is_active()) continue;
-        hero.draw(renderer);
+        hero_matrices.push_back(hero.get_matrix());
+        hero_texture_indices.push_back(0);
     }
+
+    renderer->draw_instanced_with_texture_array("frieren-blob", "frieren-blob-array", hero_matrices, hero_texture_indices);
+    //Nieuw
 
     terrain.draw(renderer);
 
