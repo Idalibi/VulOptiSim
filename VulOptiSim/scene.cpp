@@ -41,13 +41,11 @@ void Scene::load_models_and_textures() const
         CUBE_MOSS_TEXTURE_PATH }; //Floor
     renderer->load_texture_array("texture_array_test", texture_paths);
 
-    //NPCs (wat is dit Gert? en waarom staat dit op commentaar?)
+    //NPCs (wat is dit Gert? en waarom staat dit op commentaar?) Ik kon ze niet vinden in de simulatie
     //renderer->load_model("konata", MODEL_PATH);
     //renderer->load_texture("konata", KONATA_MODAL_TEXTURE_PATH);
 
     renderer->load_model("frieren-blob", FRIEREN_PATH); //Path finding algoritme denk ik controlleren en verbeteren (de anderen ook)
-    renderer->load_texture("frieren-blob", FRIEREN_TEXTURE_PATH);
-
     std::vector<std::filesystem::path> frieren_texture{ FRIEREN_TEXTURE_PATH };
     renderer->load_texture_array("frieren-blob-array", frieren_texture);
 
@@ -55,7 +53,7 @@ void Scene::load_models_and_textures() const
     renderer->load_texture("staff", STAFF_TEXTURE_PATH);
 
     renderer->load_model("cube", CUBE_MODEL_PATH);
-    renderer->load_texture("cube", CUBE_SEA_TEXTURE_PATH);
+    //renderer->load_texture("cube", CUBE_SEA_TEXTURE_PATH); Lijkt dubbel en onzichtbaar
 
     //Effects
     std::vector<std::filesystem::path> shield_path{ SHIELD_TEXTURE_PATH };
@@ -286,9 +284,17 @@ void Scene::update(const float delta_time)
         }
     }
 
-    for (auto& hero : heroes)
+    static HeroPositions hero_positions;
+    hero_positions.positions.resize(heroes.size());
+    hero_positions.max_radius = 0.f;
+
+    for (size_t i = 0; i < heroes.size(); ++i)
     {
-        hero.update(delta_time, terrain);
+        heroes[i].update(delta_time, terrain);
+
+        // Het object zit nu toch al in de cache, dus dit kost bijna niets extra
+        hero_positions.positions[i] = heroes[i].get_position();
+        hero_positions.max_radius = std::max(hero_positions.max_radius, heroes[i].get_collision_radius());
     }
 
     shield = Shield{ "shield", heroes };
@@ -300,7 +306,7 @@ void Scene::update(const float delta_time)
 
     for (auto& lightning : active_lightning)
     {
-        lightning.update(delta_time, camera, heroes);
+        lightning.update(delta_time, camera, heroes, hero_positions);   // NIEUW: extra argument
     }
 
     //Remove inactive lightning
@@ -309,7 +315,7 @@ void Scene::update(const float delta_time)
 
     for (auto& projectile : projectiles)
     {
-        projectile.update(delta_time, camera, shield, heroes);
+        projectile.update(delta_time, camera, shield, heroes, hero_positions);   // NIEUW: extra argument
     }
 
     //Remove inactive projectiles

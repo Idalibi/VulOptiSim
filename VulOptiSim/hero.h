@@ -1,4 +1,13 @@
 #pragma once
+#include <vector>
+#include <glm/glm.hpp>
+
+// Compacte kopie van de hero-posities (zelfde index als Scene::heroes), één keer per frame gevuld.
+struct HeroPositions
+{
+    std::vector<glm::vec3> positions;
+    float max_radius = 0.5f; // grootste collision-radius van alle heroes
+};
 
 class Hero
 {

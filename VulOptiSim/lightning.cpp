@@ -1,5 +1,7 @@
 #include "pch.h"
 #include "lightning.h"
+#include "hero.h"
+
 
 Lightning::Lightning() = default;
 
@@ -13,7 +15,7 @@ Lightning::Lightning(glm::vec3 position) : animation_timer("lightning", 0, 10, 0
     collision_box_max = transform.get_position2d() + glm::vec2(plane_size.x / 2, plane_size.y / 2);
 }
 
-void Lightning::update(const float delta_time, const Camera& camera, std::vector<Hero>& heroes)
+void Lightning::update(const float delta_time, const Camera& camera, std::vector<Hero>& heroes, const HeroPositions& hero_positions)
 {
     if (active)
     {
@@ -29,7 +31,7 @@ void Lightning::update(const float delta_time, const Camera& camera, std::vector
         animation_timer.update(delta_time);
 
         //Damage any heroes in range
-        check_hits(heroes);
+        check_hits(heroes, hero_positions);
     }
 }
 
@@ -41,17 +43,31 @@ void Lightning::register_draw(Sprite_Manager<Lightning>& sprite_manager) const
     }
 }
 
-void Lightning::check_hits(std::vector<Hero>& heroes) const
+void Lightning::check_hits(std::vector<Hero>& heroes, const HeroPositions& hero_positions) const
 {
-    if (active)
+    if (!active)
     {
-        for (auto& hero : heroes)
+        return;
+    }
+
+    // Voorfilter: de box iets vergroot met de grootste hero-radius. Wat hier buiten ligt, kan nooit raken.
+    const float margin = hero_positions.max_radius + 0.01f;
+    const glm::vec2 min = collision_box_min - glm::vec2(margin);
+    const glm::vec2 max = collision_box_max + glm::vec2(margin);
+
+    for (size_t i = 0; i < heroes.size(); ++i)
+    {
+        const glm::vec3& p = hero_positions.positions[i];
+        if (p.x < min.x || p.x > max.x || p.z < min.y || p.z > max.y)
         {
-            if (hero.is_active() && hero.collision(collision_box_min, collision_box_max))
-            {
-                Log::get_instance()->add_log("%s is hit by lightning!\n", hero.get_name());
-                hero.take_damage(damage_per_frame);
-            }
+            continue; // zeker buiten bereik
+        }
+
+        Hero& hero = heroes[i];
+        if (hero.is_active() && hero.collision(collision_box_min, collision_box_max))
+        {
+            Log::get_instance()->add_log("%s is hit by lightning!\n", hero.get_name());
+            hero.take_damage(damage_per_frame);
         }
     }
 }

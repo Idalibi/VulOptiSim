@@ -1,5 +1,7 @@
 #include "pch.h"
 #include "projectile.h"
+#include "hero.h"
+
 
 Projectile::Projectile()
 {
@@ -11,10 +13,22 @@ Projectile::Projectile(glm::vec3 spawn_position, Hero* target) : target(target),
     direction = glm::normalize(target->get_position() - spawn_position);
 }
 
-void Projectile::update(const float delta_time, const Camera& camera, const Shield& shield, std::vector<Hero>& heroes)
+void Projectile::update(const float delta_time, const Camera& camera, const Shield& shield, std::vector<Hero>& heroes, const HeroPositions& hero_positions) 
 {
     if (active)
     {
+        if (exploding)
+        {
+            explosion_timer += delta_time;
+            animation_timer.update(delta_time);
+            rotate_to_camera(camera);
+
+            if (explosion_timer >= explosion_duration)
+            {
+                active = false;
+            }
+            return;
+        }
         uptime += delta_time;
 
         if (uptime >= lifetime)
@@ -43,37 +57,62 @@ void Projectile::update(const float delta_time, const Camera& camera, const Shie
             active = false;
         }
 
-        check_collisions(heroes);
+        check_collisions(heroes, hero_positions);
     }
 }
 
-void Projectile::check_collisions(std::vector<Hero>& heroes)
+void Projectile::check_collisions(std::vector<Hero>& heroes, const HeroPositions& hero_positions)
 {
-    for (const auto& hero : heroes)
-    {
-        if (hero.collision(transform.position, radius))
-        {
-            Log::get_instance()->add_log("The projectile explodes near %s.\n", hero.get_name());
+    // Voorfilter in het xz-vlak. De echte 3D-afstand is nooit kleiner dan de afstand in xz,
+    // dus wat hier te ver weg is, kan nooit raken.
+    const float reach = radius + hero_positions.max_radius + 0.01f;
+    const float reach_sq = reach * reach;
 
-            explode(heroes);
+    for (size_t i = 0; i < heroes.size(); ++i)
+    {
+        const glm::vec3& p = hero_positions.positions[i];
+        const float dx = p.x - transform.position.x;
+        const float dz = p.z - transform.position.z;
+        if (dx * dx + dz * dz > reach_sq)
+        {
+            continue;
+        }
+
+        if (heroes[i].collision(transform.position, radius))
+        {
+            Log::get_instance()->add_log("The projectile explodes near %s.\n", heroes[i].get_name());
+
+            explode(heroes, hero_positions);
 
             break; //Projectile exploded, exit
         }
     }
 }
 
-void Projectile::explode(std::vector<Hero>& heroes)
+void Projectile::explode(std::vector<Hero>& heroes, const HeroPositions& hero_positions)
 {
-    for (auto& hero : heroes)
+    const float reach = explosion_radius + hero_positions.max_radius + 0.01f;
+    const float reach_sq = reach * reach;
+
+    for (size_t i = 0; i < heroes.size(); ++i)
     {
-        if (hero.collision(transform.position, explosion_radius))
+        const glm::vec3& p = hero_positions.positions[i];
+        const float dx = p.x - transform.position.x;
+        const float dz = p.z - transform.position.z;
+        if (dx * dx + dz * dz > reach_sq)
         {
-            hero.take_damage(damage);
+            continue;
+        }
+
+        if (heroes[i].collision(transform.position, explosion_radius))
+        {
+            heroes[i].take_damage(damage);
         }
     }
 
-    active = false;
-    //TODO: Explode
+    exploding = true;
+    explosion_timer = 0.f;
+    transform.scale = glm::vec3(explosion_radius * 2.f); // pas de grootte aan naar smaak
 }
 
 void Projectile::register_draw(Sprite_Manager<Projectile>& sprite_manager) const

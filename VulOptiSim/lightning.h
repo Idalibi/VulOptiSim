@@ -7,7 +7,7 @@ public:
     Lightning();
     Lightning(glm::vec3 position);
 
-    void update(const float delta_time, const Camera& camera, std::vector<Hero>& heroes);
+    void update(const float delta_time, const Camera& camera, std::vector<Hero>& heroes, const HeroPositions& hero_positions);
     void register_draw(Sprite_Manager<Lightning>& sprite_manager) const;
 
 
@@ -22,7 +22,7 @@ private:
 
     void rotate_to_camera(const Camera& camera);
 
-    void check_hits(std::vector<Hero>& heroes) const;
+    void check_hits(std::vector<Hero>& heroes, const HeroPositions& hero_positions) const;
 
     Sprite_Animation animation_timer;
 
