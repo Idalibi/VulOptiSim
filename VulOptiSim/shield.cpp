@@ -63,7 +63,7 @@ Shield::Shield(const std::string& texture_array_name, const std::vector<Hero>& h
     grow_from_centroid();
 }
 
-void Shield::draw(vulvox::Renderer* renderer) const //Deze shield is een convex hull rondom alle Frieren heen. Zou deze beter kunnen? Ik denk t wel.
+void Shield::draw(vulvox::Renderer* renderer) const //Deze shield is een convex hull rondom alle Frieren heen. Zou deze beter kunnen? Ik denk t wel. (hoeft dit wel iedere keer of kan ik ook de hull groter maken en minder vaak aanroepen?)
 {
     if (convex_hull_points.size() <= 1)
     {

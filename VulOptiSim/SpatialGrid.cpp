@@ -5,7 +5,15 @@ SpatialGrid::SpatialGrid(float cellSize)
 }
 
 void SpatialGrid::clear() {
-    m_grid.clear();
+    for (auto it = m_grid.begin(); it != m_grid.end(); ) {
+        if (it->second.empty()) {
+            it = m_grid.erase(it);      // cel was al een frame leeg: opruimen
+        }
+        else {
+            it->second.clear();         // lijst leegmaken, maar de capaciteit blijft behouden
+            ++it;
+        }
+    }
 }
 
 SpatialGrid::CellCoord SpatialGrid::get_cell(const glm::vec2& position) const {

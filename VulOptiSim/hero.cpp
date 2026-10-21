@@ -93,7 +93,7 @@ void Hero::take_damage(int damage)
 
     health -= damage;
 
-    Log::get_instance()->add_log("%s takes %d damage.\n", name, damage);
+    Log::get_instance()->add_log("%s takes %d damage.\n", name, damage); //%s aanpassen, kan een const char* verwachten. Gebruik c_str() om het te voorkomen maar lijkt geen probleem nu.
 
     if (health <= 0)
     {

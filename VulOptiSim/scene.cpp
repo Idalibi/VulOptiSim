@@ -4,6 +4,33 @@
 #include <algorithm>     
 #include <array>
 #include <cstdio>
+#include <chrono>
+
+namespace
+{
+    // Meet hoe lang een blok code duurt (ms), gemiddeld over de laatste frames
+    struct ScopedTimer
+    {
+        explicit ScopedTimer(double& out_ms) : out(out_ms), start(std::chrono::steady_clock::now()) {}
+        ~ScopedTimer()
+        {
+            const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
+            out = out * 0.9 + ms * 0.1;
+        }
+        double& out;
+        std::chrono::steady_clock::time_point start;
+    };
+
+    double g_collision_ms = 0.0;
+    double g_hero_update_ms = 0.0;
+    double g_shield_ms = 0.0;
+    double g_effects_ms = 0.0;
+    double g_update_total_ms = 0.0;
+    double g_draw_total_ms = 0.0;
+    size_t g_pairs_checked = 0;
+    size_t g_pairs_colliding = 0;
+    size_t g_cell_count = 0;
+}
 
 Scene::Scene(vulvox::Renderer& renderer) : renderer(&renderer) //Constructor
 {
@@ -35,11 +62,12 @@ void Scene::load_models_and_textures() const
 
     //Terrain textures
     std::vector<std::filesystem::path> texture_paths{
-        CUBE_SEA_TEXTURE_PATH,  //Sea
-        CUBE_GRASS_FLOWER_TEXTURE_PATH, //Lab floor
-        CUBE_CONCRETE_WALL_TEXTURE_PATH, //Lab walls
-        CUBE_MOSS_TEXTURE_PATH }; //Floor
+        CUBE_SEA_TEXTURE_PATH,              //Sea
+        CUBE_GRASS_FLOWER_TEXTURE_PATH,     //Lab floor
+        CUBE_CONCRETE_WALL_TEXTURE_PATH,    //Lab walls
+        CUBE_MOSS_TEXTURE_PATH };           //Floor
     renderer->load_texture_array("texture_array_test", texture_paths);
+    renderer->load_model("cube", CUBE_MODEL_PATH);
 
     //NPCs (wat is dit Gert? en waarom staat dit op commentaar?) Ik kon ze niet vinden in de simulatie
     //renderer->load_model("konata", MODEL_PATH);
@@ -52,15 +80,10 @@ void Scene::load_models_and_textures() const
     renderer->load_model("staff", STAFF_PATH);
     renderer->load_texture("staff", STAFF_TEXTURE_PATH);
 
-    renderer->load_model("cube", CUBE_MODEL_PATH);
-    //renderer->load_texture("cube", CUBE_SEA_TEXTURE_PATH); Lijkt dubbel en onzichtbaar
-
     //Effects
     std::vector<std::filesystem::path> shield_path{ SHIELD_TEXTURE_PATH };
     renderer->load_texture_array("shield", shield_path);
-
     renderer->load_texture_array("lightning", LIGHTNING_TEXTURE_PATHS);
-
     renderer->load_texture_array("fireball", FIREBALL_TEXTURE_PATHS);
 }
 
@@ -77,6 +100,18 @@ void Scene::spawn_heroes() //Deze is eenmalig
     float spawn_start_y = terrain.tile_width * 3.f;
 
     float start_corner_y = 9.f * terrain.tile_width;
+
+    // NIEUW: hoe ver een hero van het midden van de tegels af mag lopen. Maximaal de halve tegel
+    // min de straal van de hero zelf, anders steekt zijn lichaam in de muur ernaast en komt die er bovenop.
+    const float hero_radius = 0.5f;
+    const float max_offset_x = std::max(0.f, 0.5f * terrain.tile_width - hero_radius);
+    const float max_offset_z = std::max(0.f, 0.5f * terrain.tile_length - hero_radius);
+    const float route_spread = 0.8f;     // deel van die vrije ruimte dat gebruikt wordt (0 = uit, 1 = tot de rand)
+    const float offset_range_x = route_spread * max_offset_x;
+    const float offset_range_z = route_spread * max_offset_z;
+
+    std::cout << "Route spread: tegel " << terrain.tile_width << " x " << terrain.tile_length
+        << ", verschuiving tot " << offset_range_x << " x " << offset_range_z << std::endl;
 
     std::cout << "Spawning characters and calculating routes...(met een threadpool hopelijk)" << std::endl;
 
@@ -107,38 +142,47 @@ void Scene::spawn_heroes() //Deze is eenmalig
             float start_area_offset = static_cast<float>(s) * start_area_tile_offset * terrain.tile_width;
             int local_spawn_count = s * 900; // voor unieke namen te behouden
 
+            // NIEUW: een eigen generator per startgebied (thread-veilig). Een vast zaadje geeft elke run dezelfde uitkomst.
+            std::mt19937 rng(static_cast<unsigned int>(s) + 1u);
+            std::uniform_real_distribution<float> unit(-1.f, 1.f);
+
             for (int i = 0; i < 30; i++) //O(30) O(start_area * 30)
             {
                 for (int j = 0; j < 30; j++) //O(30) O start_area * 30 * 30) = O(start_area * 900)
                 {
                     float x = start_corner_y + start_area_offset + ((float)i * spawn_offset);
                     float z = spawn_start_y + ((float)j * spawn_offset);
-                    float y = terrain.get_height(glm::vec2(x, z)); //Wel een zware functie denk ik (path finding)
+                    float y = terrain.get_height(glm::vec2(x, z));
 
                     Transform local_transform = hero_transform;
                     local_transform.position = glm::vec3(x, y, z);
 
                     local_spawn_count++;
 
-
-                    //Dit algoritme moet beter. deze is taai
                     auto r = terrain.find_route(
-                        glm::vec2(x, z), 
+                        glm::vec2(x, z),
                         glm::vec2(69 * terrain.tile_width, 160 * terrain.tile_width)
-                    ); //Path finding (deze 9000 keer is wel een hele hoop. wellicht is het per spatial grid handiger of per groep, iets in die zin)
-                    local_heroes.push_back({ "frieren-blob", "frieren-blob", local_transform, "Frieren" + std::to_string(local_spawn_count), 20.f,r });
+                    );
 
+                    // NIEUW: elke hero krijgt een vaste verschuiving binnen de tegel, zodat niet iedereen
+                    // over exact dezelfde lijn van tegelmiddens loopt
+                    const glm::vec2 offset(unit(rng)* offset_range_x, unit(rng)* offset_range_z);
+                    for (auto& waypoint : r)
+                    {
+                        waypoint += offset;
+                    }
+
+                    local_heroes.push_back({ "frieren-blob", "frieren-blob", local_transform, "Frieren" + std::to_string(local_spawn_count), 20.f, r });
                 }
             }
             return local_heroes;
-        }));
+            }));
     }
 
     int total_spawn_count = 0;
     for (auto& f : futures) {
         std::vector<SpawnedHeroInfo> area_heroes = f.get();
         for (const auto& h : area_heroes) {
-            // GEBRUIK HIER h.transform IN PLAATS VAN DE ALGEMENE hero_transform!
             heroes.emplace_back(h.mesh1, h.mesh2, h.transform, h.name, h.speed);
             heroes.back().set_route(h.route);
             total_spawn_count++;
@@ -146,8 +190,9 @@ void Scene::spawn_heroes() //Deze is eenmalig
     }
     Log::get_instance()->add_log("Spawned %d characters using ThreadPool.\n", total_spawn_count);
     std::cout << "Spawning finished successfully!" << std::endl;
-
 }
+
+
 void Scene::spawn_staves()
 {
     glm::vec2 spawn_start{ terrain.tile_width * 15.f,  terrain.tile_length * 48.f };
@@ -183,6 +228,7 @@ size_t Scene::get_staff_count() const
 
 void Scene::update(const float delta_time)
 {
+    ScopedTimer total_timer(g_update_total_ms);
     handle_input(delta_time);
 
     if (follow_mode)
@@ -200,9 +246,11 @@ void Scene::update(const float delta_time)
         camera.set_direction(camera_to_furthest);
     }
 
-
     renderer->set_view_matrix(camera.get_view_matrix());
 
+
+
+    ScopedTimer t_collision(g_collision_ms);
     //Make heroes collide with each other (Spatial Grid, half-stencil)
     static SpatialGrid spatial_grid(5.0f); // LET OP: pas 40.0f aan naar ~2x de radius van je hero //20 maakte het een heel stuk sneller op begin (45 fps eerst wtff) (later werd het + - 25) (radius is 0.5f;)
     spatial_grid.clear();
@@ -223,15 +271,24 @@ void Scene::update(const float delta_time)
         }
     }
 
+    size_t pairs_checked = 0;       // NIEUW
+    size_t pairs_colliding = 0;     // NIEUW
+    static std::vector<glm::vec2> pushes;
+    pushes.assign(heroes.size(), glm::vec2(0.f));
+
     //Los één botsend paar op
     auto resolve_pair = [&](size_t i, size_t j)
         {
+            ++pairs_checked;
+            
             const glm::vec2 direction = positions[j] - positions[i];
             const float rad_sum = radii[i] + radii[j];
 
             // Snelle afstand-check zonder wortel
             const float dist_sq = glm::dot(direction, direction);
             if (dist_sq >= rad_sum * rad_sum) return;
+
+            ++pairs_colliding;
 
             float distance = std::sqrt(dist_sq);
             glm::vec2 norm_direction;
@@ -248,8 +305,8 @@ void Scene::update(const float delta_time)
 
             const float overlap = rad_sum - distance;
 
-            heroes[i].push(-norm_direction, overlap * 0.5f);
-            heroes[j].push(norm_direction, overlap * 0.5f);
+            pushes[i] -= norm_direction * (overlap * 0.5f);
+            pushes[j] += norm_direction * (overlap * 0.5f);
         };
 
     //Alleen 4 van de 8 buren: elk celpaar wordt zo precies één keer bezocht
@@ -284,21 +341,66 @@ void Scene::update(const float delta_time)
         }
     }
 
-    static HeroPositions hero_positions;
-    hero_positions.positions.resize(heroes.size());
-    hero_positions.max_radius = 0.f;
-
     for (size_t i = 0; i < heroes.size(); ++i)
     {
-        heroes[i].update(delta_time, terrain);
-
-        // Het object zit nu toch al in de cache, dus dit kost bijna niets extra
-        hero_positions.positions[i] = heroes[i].get_position();
-        hero_positions.max_radius = std::max(hero_positions.max_radius, heroes[i].get_collision_radius());
+        if (pushes[i] != glm::vec2(0.f))
+        {
+            heroes[i].push(pushes[i], 1.0f);
+        }
     }
 
-    shield = Shield{ "shield", heroes };
+    g_pairs_checked = pairs_checked;
+    g_pairs_colliding = pairs_colliding;
+    g_cell_count = cells.size();
 
+    ScopedTimer t_hero(g_hero_update_ms);
+
+    static HeroPositions hero_positions;
+    static const unsigned int thread_count = std::max(1u, std::thread::hardware_concurrency());
+    static ThreadPool pool(thread_count);
+
+    hero_positions.positions.resize(heroes.size());
+
+    std::vector<std::future<float>> futures;
+    futures.reserve(thread_count);
+    const size_t chunk = (heroes.size() + thread_count - 1) / thread_count;
+
+    for (size_t begin = 0; begin < heroes.size(); begin += chunk)
+    {
+        const size_t end = std::min(begin + chunk, heroes.size());
+
+        futures.push_back(pool.enqueue([&, begin, end]()
+            {
+                float local_max = 0.f;
+                for (size_t i = begin; i < end; ++i)
+                {
+                    heroes[i].update(delta_time, terrain);
+                    hero_positions.positions[i] = heroes[i].get_position();
+                    local_max = std::max(local_max, heroes[i].get_collision_radius());
+                }
+                return local_max;
+            }));
+    }
+
+    hero_positions.max_radius = 0.f;
+    for (auto& f : futures)
+    {
+        hero_positions.max_radius = std::max(hero_positions.max_radius, f.get());
+    }
+
+    ScopedTimer t_shield(g_shield_ms);
+    constexpr float SHIELD_REFRESH_INTERVAL = 0.05f;               // seconden tussen twee herberekeningen
+    static float shield_timer = SHIELD_REFRESH_INTERVAL;           // begint "vol", dus de eerste frame bouwt hij meteen
+
+    shield_timer += delta_time;
+    if (shield_timer >= SHIELD_REFRESH_INTERVAL)
+    {
+        shield = Shield{ "shield", heroes };
+        shield_timer = 0.f;
+    }
+
+
+    ScopedTimer t_effects(g_effects_ms);
     for (auto& staff : staves)
     {
         staff.update(delta_time, heroes, active_lightning, projectiles);
@@ -325,6 +427,7 @@ void Scene::update(const float delta_time)
 
 void Scene::draw()
 {
+    ScopedTimer total_timer(g_draw_total_ms);
     //On using concurrency here:
     //  The graphics library copies the data to GPU memory so you can change the data after the draw functions of the renderer return.
     //  The actual drawing runs parallel to the host (CPU) execution.
@@ -349,6 +452,9 @@ void Scene::draw()
 
     terrain.draw(renderer);
 
+
+    ScopedTimer t_effects(g_effects_ms);
+
     for (const auto& staff : staves)
     {
         staff.draw(renderer);
@@ -372,7 +478,24 @@ void Scene::draw()
 
     shield.draw(renderer);
 
-
+    //Ik had het gevoel alsof ik een fps cap had op 60 dus check dat hiermee (klopte er werd 5 tot 7 milisec gewacht per proces door fpscap)
+    const double frame_ms = 1000.0 / ImGui::GetIO().Framerate;
+    ImGui::Begin("Timings");
+    ImGui::Text("Frame:        %.2f ms (%.0f fps)", frame_ms, ImGui::GetIO().Framerate);
+    ImGui::Text("Update totaal:%.2f ms", g_update_total_ms);
+    ImGui::Text("Draw totaal:  %.2f ms", g_draw_total_ms);
+    ImGui::Text("Overig/wacht: %.2f ms", frame_ms - g_update_total_ms - g_draw_total_ms);
+    ImGui::Separator();
+    ImGui::Text("Botsingen:    %.2f ms", g_collision_ms);
+    ImGui::Text("Hero update:  %.2f ms", g_hero_update_ms);
+    ImGui::Text("Schild:       %.2f ms", g_shield_ms);
+    ImGui::Text("Effecten:     %.2f ms", g_effects_ms);
+    ImGui::Separator();
+    ImGui::Text("Paren gecontroleerd: %zu", g_pairs_checked);
+    ImGui::Text("Paren die botsen:    %zu", g_pairs_colliding);
+    ImGui::Text("Cellen: %zu (ca. %.1f heroes per cel)", g_cell_count,
+        g_cell_count ? static_cast<double>(heroes.size()) / g_cell_count : 0.0);
+    ImGui::End();
 
     show_health_values();
     show_mana_values();

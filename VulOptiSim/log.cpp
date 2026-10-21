@@ -26,7 +26,7 @@ void Log::clear()
     line_offsets.push_back(0);
 }
 
-void Log::add_log(const char* fmt, ...) IM_FMTARGS(2)
+void Log::add_log(const char* fmt, ...) IM_FMTARGS(2) //Deze log moet misschien iets beter, er worden nu eindeloos veel logs toegevoegd aan het schermpje
 {
     int old_size = text_buffer.size();
     va_list args;

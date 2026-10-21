@@ -50,6 +50,8 @@
 #include "shield.h"
 #include "lightning.h"
 #include "projectile.h"
+#include "cassert"
+#include <random>
 
 
 const std::filesystem::path TERRAIN_PATH = "../models/map.png";
