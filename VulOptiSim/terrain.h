@@ -20,6 +20,8 @@ public:
 
     std::vector<glm::vec2> find_route(const glm::vec2& start_position, const glm::vec2& target_position) const;
     std::vector<glm::vec2> find_route_astar(const glm::vec2& start_position, const glm::vec2& target_position) const;
+    std::vector<int> compute_distance_field(const glm::vec2& target_position) const;
+    std::vector<glm::vec2> route_from_field(const std::vector<int>& dist, const glm::vec2& start_position) const;
 
 
     bool in_bounds(const glm::vec2& position2d) const;

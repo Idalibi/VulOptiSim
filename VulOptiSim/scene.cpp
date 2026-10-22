@@ -66,8 +66,8 @@ void Scene::load_models_and_textures() const
         CUBE_GRASS_FLOWER_TEXTURE_PATH,     //Lab floor
         CUBE_CONCRETE_WALL_TEXTURE_PATH,    //Lab walls
         CUBE_MOSS_TEXTURE_PATH };           //Floor
-    renderer->load_texture_array("texture_array_test", texture_paths);
-    renderer->load_model("cube", CUBE_MODEL_PATH);
+    //renderer->load_texture_array("texture_array_test", texture_paths);
+    //renderer->load_model("cube", CUBE_MODEL_PATH);
 
     //NPCs (wat is dit Gert? en waarom staat dit op commentaar?) Ik kon ze niet vinden in de simulatie
     //renderer->load_model("konata", MODEL_PATH);
@@ -447,10 +447,11 @@ void Scene::draw()
         hero_texture_indices.push_back(0);
     }
 
-    renderer->draw_instanced_with_texture_array("frieren-blob", "frieren-blob-array", hero_matrices, hero_texture_indices);
+    //renderer->draw_instanced_with_texture_array("frieren-blob", "frieren-blob-array", hero_matrices, hero_texture_indices); //deze veel driehoeken en dus 45 fps en 80% gebruik
+    renderer->draw_instanced_with_texture_array("cube", "frieren-blob-array", hero_matrices, hero_texture_indices); //Test frieren-blob vervangen met cube zorgt voor 60fps en 55% gebruik. (kijk hiermee of er nog cpu gebonden voordelen te behalen zijn)
     //Nieuw
 
-    terrain.draw(renderer);
+    terrain.draw(renderer);//Deze is net de line hiervoor de zwaarsten want ze zijn beide gpu gebonden.
 
 
     ScopedTimer t_effects(g_effects_ms);
@@ -478,7 +479,7 @@ void Scene::draw()
 
     shield.draw(renderer);
 
-    //Ik had het gevoel alsof ik een fps cap had op 60 dus check dat hiermee (klopte er werd 5 tot 7 milisec gewacht per proces door fpscap)
+    //Ik had het gevoel alsof ik een fps cap had op 60 dus check dat hiermee (klopte er werd 5 tot 7 milisec gewacht per proces door fpscap) (dat klopt dus wel)
     const double frame_ms = 1000.0 / ImGui::GetIO().Framerate;
     ImGui::Begin("Timings");
     ImGui::Text("Frame:        %.2f ms (%.0f fps)", frame_ms, ImGui::GetIO().Framerate);
