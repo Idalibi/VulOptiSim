@@ -447,8 +447,8 @@ void Scene::draw()
         hero_texture_indices.push_back(0);
     }
 
-    //renderer->draw_instanced_with_texture_array("frieren-blob", "frieren-blob-array", hero_matrices, hero_texture_indices); //deze veel driehoeken en dus 45 fps en 80% gebruik
-    renderer->draw_instanced_with_texture_array("cube", "frieren-blob-array", hero_matrices, hero_texture_indices); //Test frieren-blob vervangen met cube zorgt voor 60fps en 55% gebruik. (kijk hiermee of er nog cpu gebonden voordelen te behalen zijn)
+    renderer->draw_instanced_with_texture_array("frieren-blob", "frieren-blob-array", hero_matrices, hero_texture_indices); //deze veel driehoeken en dus 45 fps en 80% gebruik
+    //renderer->draw_instanced_with_texture_array("cube", "frieren-blob-array", hero_matrices, hero_texture_indices); //Test frieren-blob vervangen met cube zorgt voor 60fps en 55% gebruik. (kijk hiermee of er nog cpu gebonden voordelen te behalen zijn)
     //Nieuw
 
     terrain.draw(renderer);//Deze is net de line hiervoor de zwaarsten want ze zijn beide gpu gebonden.

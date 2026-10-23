@@ -42,7 +42,9 @@ public:
 
     int get_health() const { return health; };
     int get_mana() const { return mana; };
-    glm::mat4 get_matrix() const { return transform.get_matrix(); }
+
+    //Toegevoegd: deze is voor ...
+    glm::mat4 get_matrix() const { return transform.get_matrix(); }//wordt gebruikt in scene
 
     bool is_active() const { return active; }; //Wat betekend is active?
 
