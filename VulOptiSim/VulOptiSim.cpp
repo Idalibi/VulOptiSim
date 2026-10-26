@@ -23,7 +23,7 @@ void measure_performance(const vulvox::Renderer& renderer, const Scene& scene, f
     static float last_speedup = 1.1;
     static float total_speedup = 14.973f; //In vergelijking met ORIGINAL_REF_PERFORMANCE (small screen) (best tevreden over maar werkelijk meer)
     float REF_PERFORMANCE = 138147.562f; //(nu alles fuulscreen ipv het kleine scherm)
-    float kleinScherm_REF_PERFORMANCE = 106629.961f; //alsnog een 1.3 speedup bovenop de fullscreen (wel logisch) (tijd 1:46:629) (Yay 60 FPS ongeveer Wooww)
+    float kleinScherm_REF_PERFORMANCE = 105822.922f; //alsnog een 1.3 speedup bovenop de fullscreen (wel logisch) (tijd 1:45:822) (Yay 60 FPS ongeveer Wooww)
 
     if (frame_count >= max_frames)
     {
