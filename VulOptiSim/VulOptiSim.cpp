@@ -1,6 +1,13 @@
 #include "pch.h"
 #include "scene.h"
 
+//---------------------------------------
+// Door Marc de Jong
+// Engelstalig commentaar = Gert
+// Nederlandstalig commentaar = Marc
+// Uiteindelijke speedup is 14.973 (werkelijk meer maar laptoplimitaties)
+//---------------------------------------
+
 // -----------------------------------------------------------
 // When we reach max_frames print the duration and speedup multiplier
 // Updating REF_PERFORMANCE at the top of this file with the value
@@ -9,13 +16,14 @@
 void measure_performance(const vulvox::Renderer& renderer, const Scene& scene, float delta_time, std::array<float, 60>& frames, int& frame_count, bool& lock_update, const std::chrono::steady_clock::time_point& start_time)
 {
     const int max_frames = 6000;
-    float ORIGINAL_REF_PERFORMANCE = 1596654.750f;//Mijn hemeltje lief wat was dit traag
+    float ORIGINAL_REF_PERFORMANCE = 1596654.750f; //Mijn hemeltje lief wat was dit traag (4 fps ongeveer ofzo wtf)
     static std::string original_duration = "Onbekend";
 
     static float duration = 2.18; //Minuut,seconde(milisec: 2:18:147)
     static float last_speedup = 1.1;
+    static float total_speedup = 14.973f; //In vergelijking met ORIGINAL_REF_PERFORMANCE (small screen) (best tevreden over maar werkelijk meer)
     float REF_PERFORMANCE = 138147.562f; //(nu alles fuulscreen ipv het kleine scherm)
-    float kleinScherm_REF_PERFORMANCE = 106629.961f; //alsnog een 1.3 speedup bovenop de fullscreen (wel logisch) (tijd 1:46:629) (Yay 60 FPS ongeveer Wooww) (dit is kleine scherm)
+    float kleinScherm_REF_PERFORMANCE = 106629.961f; //alsnog een 1.3 speedup bovenop de fullscreen (wel logisch) (tijd 1:46:629) (Yay 60 FPS ongeveer Wooww)
 
     if (frame_count >= max_frames)
     {
@@ -51,7 +59,6 @@ void measure_performance(const vulvox::Renderer& renderer, const Scene& scene, f
     ImGui::Text("Frame delta: %f", delta_time);
     ImGui::Text("fps: %f", ImGui::GetIO().Framerate);
     ImGui::PlotLines("##FPS Plot", &frames.data()[0], (int)frames.size(), 0, nullptr, 0.0f, std::ranges::max(frames), ImVec2(300, 100));
-    //ImGui::Text(renderer.get_memory_statistics().c_str());
     ImGui::End();
 
     if (lock_update)
@@ -110,8 +117,6 @@ void measure_performance(const vulvox::Renderer& renderer, const Scene& scene, f
         // Restore styling
         ImGui::PopStyleVar(2);
         ImGui::PopStyleColor(2);
-
-
     }
 }
 
@@ -166,11 +171,6 @@ int main()
 
             current_frame++;
         }
-
         renderer.destroy();
     }
-    //catch (const std::exception& ex)
-    //{
-    //    std::cout << ex.what() << std::endl;
-    //}
 }

@@ -27,7 +27,7 @@ Terrain::Terrain(const std::filesystem::path& path_to_height_map) //Constructor
         }
     }
 
-    // NIEUW: hoogte van een kolom in voxels (zelfde berekening als hieronder); buiten de kaart = 0
+    // Bereken kolomhoogtes zonder voxels buiten de kaart aan te maken.
     auto column_height = [&](int cx, int cz) -> int
         {
             if (cx < 0 || cx >= map_width || cz < 0 || cz >= map_length) return 0;
@@ -41,8 +41,7 @@ Terrain::Terrain(const std::filesystem::path& path_to_height_map) //Constructor
             const Tile_Data& tile = map_data[(z * map_width) + x];
             int height = tile.height - lowest + 1;
 
-            // NIEUW: alleen voxels maken die van buiten zichtbaar zijn: de bovenste, plus alle voxels
-            // waarvan een buurkolom lager is (zijkant vrij). Alles daaronder zit ingesloten.
+            // Sla volledig ingesloten voxels over; alleen zichtbare voxels zijn nodig.
             const int lowest_neighbour = std::min({ column_height(x - 1, z), column_height(x + 1, z),
                                                     column_height(x, z - 1), column_height(x, z + 1) });
             const int first_visible = std::min(lowest_neighbour, height - 1);
@@ -96,12 +95,11 @@ Terrain::Terrain(const std::filesystem::path& path_to_height_map) //Constructor
         }
     }
 
-    // NIEUW (tijdelijk): zie hoeveel voxels er over zijn. Vergelijk met de waarde van vóór je wijziging.
+    // Zie hoeveel voxels er over zijn. Vergelijk met de waarde van voor de wijziging.
     std::cout << "Terrain voxels: " << terrain_transforms.size() << std::endl;
 }
 
-void Terrain::draw(vulvox::Renderer* renderer) const
-{
+void Terrain::draw(vulvox::Renderer* renderer) const{
     renderer->draw_instanced_with_texture_array("cube", "texture_array_test", terrain_transforms, texture_indices);
 }
 
@@ -123,56 +121,11 @@ float Terrain::get_height(const glm::vec2& position2d) const
 /// <summary>
 /// Uses a pathfinding algorithm to find the shortest path from given start_position to target_position.
 /// Note: Path is stored from end to start point.
+
 /// Huidige algoritme: Een Breadth-First Search algoritme (best prima) wel traag voor langere paden omdat alle afstanden van punt 1 even lang blijven.
 /// Verwachting: Als dit algoritme maar 1 keer gebruikt word zou het geen bottleneck wezen. (is het nu denk ik wel)
 /// Andere suggesties voor search: DFS, Dijkstra, A*, Two-point Dijkstra/A*, (waarschijnlijk is a* het best door de extra euclidean of Manhanntan Distance)(parent node value + distance + heuristic)
 /// </summary>
-std::vector<glm::vec2> Terrain::find_route_astar(const glm::vec2& start_position, const glm::vec2& target_position) const
-{
-    glm::ivec2 start_tile{ start_position.x / tile_width, start_position.y / tile_length }; //Beginpunt (x,y)
-    glm::ivec2 target_tile{ target_position.x / tile_width, target_position.y / tile_length }; //vervolgpunt (x,y)
-
-    //Veiligheidcheck
-    if (start_tile.x < 0 || start_tile.x >= map_width || start_tile.y < 0 || start_tile.y >= map_length ||
-        target_tile.x < 0 || target_tile.x >= map_width || target_tile.y < 0 || target_tile.y >= map_length) {
-        return std::vector<glm::vec2>();
-    }
-
-    std::queue<glm::ivec2> queue; //Een stack achtige lijst met first in first out regels (wachtrij)
-    queue.push(start_tile); //stop de startplek als eerst in de stack lijst
-
-    //This hash map is used to track the parents in the shortest path of each visited node.
-    std::unordered_map<glm::ivec2, glm::ivec2> parents; 
-
-    parents[start_tile] = start_tile;
-
-    while (!queue.empty())
-    {
-        glm::ivec2 current = queue.front(); //eerstvolgende punt
-        queue.pop(); //verwijder het voorste element uit de wachtrij
-
-        if (current == target_tile)
-        {
-            return reconstruct_path(parents, start_tile, current);
-        }
-
-        std::vector<glm::ivec2> neighbours = get_neighbours(current);
-
-        for (const glm::ivec2& neighbour : neighbours)
-        {
-            if (!parents.contains(neighbour))
-            {
-                parents[neighbour] = current;
-                queue.emplace(neighbour);
-            }
-        }
-    }
-
-    //Return empty list if we didn't reach the target position
-    return std::vector<glm::vec2>();
-}
-
-//Alternatief path finding methode (A*).
 std::vector<glm::vec2> Terrain::find_route(const glm::vec2& start_position, const glm::vec2& target_position) const
 {
     glm::ivec2 start_tile{ static_cast<int>(start_position.x / tile_width), static_cast<int>(start_position.y / tile_length) };
@@ -256,7 +209,6 @@ std::vector<glm::vec2> Terrain::find_route(const glm::vec2& start_position, cons
             }
         }
     }
-
     return {};
 }
 
@@ -283,7 +235,6 @@ void Terrain::clamp_to_bounds(glm::vec2& position2d) const
 std::vector<glm::vec2> Terrain::reconstruct_path(const std::unordered_map<glm::ivec2, glm::ivec2>& parents, const glm::ivec2& start_position, const glm::ivec2& target_position) const
 {
     std::vector<glm::vec2> path;
-
     for (glm::ivec2 current = target_position; current != start_position; current = parents.at(current))
     {
         path.emplace_back(static_cast<float>(current.x) * tile_width + tile_width / 2.f, static_cast<float>(current.y) * tile_length + tile_length / 2.f);

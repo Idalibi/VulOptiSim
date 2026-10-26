@@ -32,62 +32,54 @@ namespace
     size_t g_cell_count = 0;
 }
 
-Scene::Scene(vulvox::Renderer& renderer) : renderer(&renderer) //Constructor
+Scene::Scene(vulvox::Renderer& renderer) : renderer(&renderer)
 {
     glfwGetCursorPos(this->renderer->get_window(), &prev_mouse_pos.x, &prev_mouse_pos.y);
 
-    //Definieer de plek waar de camera moet komen
     glm::vec3 camera_pos{ -28.2815380f, 305.485260f, -30.0800228f };
     glm::vec3 camera_up{ 0.338442326f, 0.869414926f, 0.359964609f };
     glm::vec3 camera_direction{ 0.595541596f, -0.494082689f, 0.633413374f };
 
-    //Maak de camera aan
     camera = Camera(camera_pos, camera_up, camera_direction, 100.f, 100.f);
-
-    //Maak terein aan (check terrain path)
     terrain = Terrain(TERRAIN_PATH);
 
-    load_models_and_textures(); //Check van deze 3 functies waar ze hun info vandaan halen en hoe want dezen zijn traag)
-
-    spawn_heroes(); //deze moet een ander sorteelalgoritme krijgen
-
-    spawn_staves(); //deze zorgt nu voor een hoop elende
+    load_models_and_textures();
+    spawn_heroes();
+    spawn_staves();
 
     std::cout << "Scene loaded." << std::endl;
 }
 
+//Laad alle modellen en textures van alle elementen alvast in de GPU geheugen.
 void Scene::load_models_and_textures() const
 {
-    //Load all the models and textures we're going to need into GPU memory
-
     //Terrain textures
     std::vector<std::filesystem::path> texture_paths{
         CUBE_SEA_TEXTURE_PATH,              //Sea
         CUBE_GRASS_FLOWER_TEXTURE_PATH,     //Lab floor
         CUBE_CONCRETE_WALL_TEXTURE_PATH,    //Lab walls
         CUBE_MOSS_TEXTURE_PATH };           //Floor
-    //renderer->load_texture_array("texture_array_test", texture_paths);
-    //renderer->load_model("cube", CUBE_MODEL_PATH);
+    renderer->load_texture_array("texture_array_test", texture_paths);
+    renderer->load_model("cube", CUBE_MODEL_PATH);
 
-    //NPCs (wat is dit Gert? en waarom staat dit op commentaar?) Ik kon ze niet vinden in de simulatie
-    //renderer->load_model("konata", MODEL_PATH);
-    //renderer->load_texture("konata", KONATA_MODAL_TEXTURE_PATH);
-
-    renderer->load_model("frieren-blob", FRIEREN_PATH); //Path finding algoritme denk ik controlleren en verbeteren (de anderen ook)
+    //Heroes texture en model
+    renderer->load_model("frieren-blob", FRIEREN_PATH); 
     std::vector<std::filesystem::path> frieren_texture{ FRIEREN_TEXTURE_PATH };
     renderer->load_texture_array("frieren-blob-array", frieren_texture);
 
+    //Staf texture en model
     renderer->load_model("staff", STAFF_PATH);
     renderer->load_texture("staff", STAFF_TEXTURE_PATH);
 
-    //Effects
+    //Schild en effecten
     std::vector<std::filesystem::path> shield_path{ SHIELD_TEXTURE_PATH };
     renderer->load_texture_array("shield", shield_path);
     renderer->load_texture_array("lightning", LIGHTNING_TEXTURE_PATHS);
     renderer->load_texture_array("fireball", FIREBALL_TEXTURE_PATHS);
 }
 
-void Scene::spawn_heroes() //Deze is eenmalig
+//Plaatst de heroes in de spawnvakken.
+void Scene::spawn_heroes() 
 {
     Transform hero_transform;
     hero_transform.rotation = glm::quatLookAt(glm::vec3(0.f, 0.f, 1.f), glm::vec3(0.f, 1.f, 0.f));
@@ -101,7 +93,7 @@ void Scene::spawn_heroes() //Deze is eenmalig
 
     float start_corner_y = 9.f * terrain.tile_width;
 
-    // NIEUW: hoe ver een hero van het midden van de tegels af mag lopen. Maximaal de halve tegel
+    // NIEUW: Hoe ver een hero van het midden van de tegels af mag lopen. Maximaal de halve tegel,
     // min de straal van de hero zelf, anders steekt zijn lichaam in de muur ernaast en komt die er bovenop.
     const float hero_radius = 0.5f;
     const float max_offset_x = std::max(0.f, 0.5f * terrain.tile_width - hero_radius);
@@ -110,16 +102,13 @@ void Scene::spawn_heroes() //Deze is eenmalig
     const float offset_range_x = route_spread * max_offset_x;
     const float offset_range_z = route_spread * max_offset_z;
 
-    std::cout << "Route spread: tegel " << terrain.tile_width << " x " << terrain.tile_length
-        << ", verschuiving tot " << offset_range_x << " x " << offset_range_z << std::endl;
-
+    std::cout << "Route spread: tegel " << terrain.tile_width << " x " << terrain.tile_length << ", verschuiving tot " << offset_range_x << " x " << offset_range_z << std::endl;
     std::cout << "Spawning characters and calculating routes...(met een threadpool hopelijk)" << std::endl;
 
-    //initialiseer de threadpool
     unsigned int num_threads = std::thread::hardware_concurrency();
     ThreadPool pool(num_threads > 0 ? num_threads : 4);
 
-    //wederom lokale hulp struct
+    //Helper struct voor de informatie van heroes
     struct SpawnedHeroInfo {
         std::string mesh1, mesh2;
         Transform transform;
@@ -128,11 +117,11 @@ void Scene::spawn_heroes() //Deze is eenmalig
         std::vector<glm::vec2> route;
     };
 
-    //opslaan zodat we wachten tot alle groepen klaar zijn
+    //Opslaan zodat we wachten tot alle groepen klaar zijn.
     std::vector<std::future<std::vector<SpawnedHeroInfo>>> futures;
     futures.reserve(start_areas);
 
-    //Verdeel de 10 startgebieden over de threadpool
+    //Verdeel de 10 startgebieden over de workers in de threadpool.
     for (int s = 0; s < start_areas; s++) {
 
         futures.push_back(pool.enqueue([=, this]() {
@@ -140,9 +129,9 @@ void Scene::spawn_heroes() //Deze is eenmalig
             local_heroes.reserve(30 * 30);
 
             float start_area_offset = static_cast<float>(s) * start_area_tile_offset * terrain.tile_width;
-            int local_spawn_count = s * 900; // voor unieke namen te behouden
+            int local_spawn_count = s * 900; // Om unieke namen te behouden.
 
-            // NIEUW: een eigen generator per startgebied (thread-veilig). Een vast zaadje geeft elke run dezelfde uitkomst.
+            // NIEUW: Een eigen random generator per startgebied (thread-veilig). Een vast zaadje geeft elke run dezelfde uitkomst.
             std::mt19937 rng(static_cast<unsigned int>(s) + 1u);
             std::uniform_real_distribution<float> unit(-1.f, 1.f);
 
@@ -164,8 +153,8 @@ void Scene::spawn_heroes() //Deze is eenmalig
                         glm::vec2(69 * terrain.tile_width, 160 * terrain.tile_width)
                     );
 
-                    // NIEUW: elke hero krijgt een vaste verschuiving binnen de tegel, zodat niet iedereen
-                    // over exact dezelfde lijn van tegelmiddens loopt
+                    // Elke hero krijgt een vaste verschuiving binnen de tegel, zodat niet iedereen,
+                    // over exact dezelfde lijn van tegelmiddens loopt.
                     const glm::vec2 offset(unit(rng)* offset_range_x, unit(rng)* offset_range_z);
                     for (auto& waypoint : r)
                     {
@@ -176,7 +165,7 @@ void Scene::spawn_heroes() //Deze is eenmalig
                 }
             }
             return local_heroes;
-            }));
+        }));
     }
 
     int total_spawn_count = 0;
@@ -215,19 +204,14 @@ void Scene::spawn_staves()
     Log::get_instance()->add_log("Spawned %d staves.\n", spawn_count);
 }
 
-size_t Scene::get_character_count() const
-{
-    return heroes.size();
-}
-
-size_t Scene::get_staff_count() const
-{
-    return staves.size();
-
-}
+//Geeft hoeveelheid heroes terug
+size_t Scene::get_character_count() const {return heroes.size();}
+//Geeft hoeveelheid staffs terug
+size_t Scene::get_staff_count() const {return staves.size();}
 
 void Scene::update(const float delta_time)
 {
+    //Meten is weten :D
     ScopedTimer total_timer(g_update_total_ms);
     handle_input(delta_time);
 
@@ -249,13 +233,13 @@ void Scene::update(const float delta_time)
     renderer->set_view_matrix(camera.get_view_matrix());
 
 
-
+    //Meten is weten :D
     ScopedTimer t_collision(g_collision_ms);
-    //Make heroes collide with each other (Spatial Grid, half-stencil)
-    static SpatialGrid spatial_grid(5.0f); // LET OP: pas 40.0f aan naar ~2x de radius van je hero //20 maakte het een heel stuk sneller op begin (45 fps eerst wtff) (later werd het + - 25) (radius is 0.5f;)
+
+    static SpatialGrid spatial_grid(5.0f);
     spatial_grid.clear();
 
-    //Posities en radii één keer per frame in compacte arrays (cache-vriendelijk)
+    //Posities en radii één keer per frame in compacte arrays (cache-vriendelijk).
     static std::vector<glm::vec2> positions;
     static std::vector<float> radii;
     positions.resize(heroes.size());
@@ -271,12 +255,13 @@ void Scene::update(const float delta_time)
         }
     }
 
-    size_t pairs_checked = 0;       // NIEUW
-    size_t pairs_colliding = 0;     // NIEUW
+    //Meten is weten :D
+    size_t pairs_checked = 0;       
+    size_t pairs_colliding = 0;     
     static std::vector<glm::vec2> pushes;
     pushes.assign(heroes.size(), glm::vec2(0.f));
 
-    //Los één botsend paar op
+    //Los één botsend paar op.
     auto resolve_pair = [&](size_t i, size_t j)
         {
             ++pairs_checked;
@@ -284,7 +269,7 @@ void Scene::update(const float delta_time)
             const glm::vec2 direction = positions[j] - positions[i];
             const float rad_sum = radii[i] + radii[j];
 
-            // Snelle afstand-check zonder wortel
+            // Snelle afstand-check zonder wortel.
             const float dist_sq = glm::dot(direction, direction);
             if (dist_sq >= rad_sum * rad_sum) return;
 
@@ -309,13 +294,13 @@ void Scene::update(const float delta_time)
             pushes[j] += norm_direction * (overlap * 0.5f);
         };
 
-    //Alleen 4 van de 8 buren: elk celpaar wordt zo precies één keer bezocht
+    //Alleen 4 van de 8 buren: elk celpaar wordt zo precies één keer bezocht.
     static const std::array<std::pair<int, int>, 4> half_neighbors{ { {1, 0}, {-1, 1}, {0, 1}, {1, 1} } };
 
     const auto& cells = spatial_grid.get_cells();
     for (const auto& [cell_coord, cell_hero_indices] : cells)
     {
-        //Paren binnen dezelfde cel
+        //Paren binnen dezelfde cel.
         for (size_t a = 0; a < cell_hero_indices.size(); ++a)
         {
             for (size_t b = a + 1; b < cell_hero_indices.size(); ++b)
@@ -324,7 +309,7 @@ void Scene::update(const float delta_time)
             }
         }
 
-        //Paren met de 4 "voorwaartse" buurcellen
+        //Paren met de 4 "voorwaartse" buurcellen.
         for (const auto& [dx, dy] : half_neighbors)
         {
             SpatialGrid::CellCoord neighbor_coord = { cell_coord.first + dx, cell_coord.second + dy };
@@ -353,6 +338,7 @@ void Scene::update(const float delta_time)
     g_pairs_colliding = pairs_colliding;
     g_cell_count = cells.size();
 
+    //Meten is weten :D
     ScopedTimer t_hero(g_hero_update_ms);
 
     static HeroPositions hero_positions;
@@ -362,6 +348,7 @@ void Scene::update(const float delta_time)
     hero_positions.positions.resize(heroes.size());
 
     std::vector<std::future<float>> futures;
+    //Reserveer nodige opslag voor de threads om naar te schrijven. (tegen dubbel schrijven naar hetzelfde adres)
     futures.reserve(thread_count);
     const size_t chunk = (heroes.size() + thread_count - 1) / thread_count;
 
@@ -388,9 +375,10 @@ void Scene::update(const float delta_time)
         hero_positions.max_radius = std::max(hero_positions.max_radius, f.get());
     }
 
+    //Meten is weten :D
     ScopedTimer t_shield(g_shield_ms);
-    constexpr float SHIELD_REFRESH_INTERVAL = 0.05f;               // seconden tussen twee herberekeningen
-    static float shield_timer = SHIELD_REFRESH_INTERVAL;           // begint "vol", dus de eerste frame bouwt hij meteen
+    constexpr float SHIELD_REFRESH_INTERVAL = 0.05f;               // Aantal seconden tussen twee herberekeningen van de shield.
+    static float shield_timer = SHIELD_REFRESH_INTERVAL;           // Begint "vol", dus de eerste frame bouwt hij meteen een scherm.
 
     shield_timer += delta_time;
     if (shield_timer >= SHIELD_REFRESH_INTERVAL)
@@ -399,7 +387,7 @@ void Scene::update(const float delta_time)
         shield_timer = 0.f;
     }
 
-
+    //Meten is weten :D
     ScopedTimer t_effects(g_effects_ms);
     for (auto& staff : staves)
     {
@@ -408,25 +396,26 @@ void Scene::update(const float delta_time)
 
     for (auto& lightning : active_lightning)
     {
-        lightning.update(delta_time, camera, heroes, hero_positions);   // NIEUW: extra argument
+        lightning.update(delta_time, camera, heroes, hero_positions);   
     }
 
-    //Remove inactive lightning
+    //Verwijder inactieve lightning.
     const auto [first_l, last_l] = std::ranges::remove_if(active_lightning, [](const Lightning& l) { return !l.is_active(); });
     active_lightning.erase(first_l, last_l);
 
     for (auto& projectile : projectiles)
     {
-        projectile.update(delta_time, camera, shield, heroes, hero_positions);   // NIEUW: extra argument
+        projectile.update(delta_time, camera, shield, heroes, hero_positions);   
     }
 
-    //Remove inactive projectiles
+    //Verwijder inactieve projectiles.
     const auto [first_p, last_p] = std::ranges::remove_if(projectiles, [](const Projectile& p) { return !p.is_active(); });
     projectiles.erase(first_p, last_p);
 }
 
 void Scene::draw()
 {
+    //Meten is weten :D
     ScopedTimer total_timer(g_draw_total_ms);
     //On using concurrency here:
     //  The graphics library copies the data to GPU memory so you can change the data after the draw functions of the renderer return.
@@ -434,9 +423,10 @@ void Scene::draw()
     //  Make sure the data needed for drawing (position etc.) is ready before calling the corresponding draw functions or weird things happen.
     //  Calling draw functions outside of this functions lifetime will crash the program!
 
-    ///Nieuw
+    //  Is goed Gert! :D
+
     static std::vector<glm::mat4> hero_matrices;
-    static std::vector<uint32_t> hero_texture_indices; // zelfde type als texture_indices in terrain.h
+    static std::vector<uint32_t> hero_texture_indices;
     hero_matrices.clear();
     hero_texture_indices.clear();
 
@@ -447,13 +437,10 @@ void Scene::draw()
         hero_texture_indices.push_back(0);
     }
 
-    renderer->draw_instanced_with_texture_array("frieren-blob", "frieren-blob-array", hero_matrices, hero_texture_indices); //deze veel driehoeken en dus 45 fps en 80% gebruik
-    //renderer->draw_instanced_with_texture_array("cube", "frieren-blob-array", hero_matrices, hero_texture_indices); //Test frieren-blob vervangen met cube zorgt voor 60fps en 55% gebruik. (kijk hiermee of er nog cpu gebonden voordelen te behalen zijn)
-    //Nieuw
+    renderer->draw_instanced_with_texture_array("frieren-blob", "frieren-blob-array", hero_matrices, hero_texture_indices);
+    terrain.draw(renderer);
 
-    terrain.draw(renderer);//Deze is net de line hiervoor de zwaarsten want ze zijn beide gpu gebonden.
-
-
+    //Meten is weten :D
     ScopedTimer t_effects(g_effects_ms);
 
     for (const auto& staff : staves)
@@ -479,7 +466,7 @@ void Scene::draw()
 
     shield.draw(renderer);
 
-    //Ik had het gevoel alsof ik een fps cap had op 60 dus check dat hiermee (klopte er werd 5 tot 7 milisec gewacht per proces door fpscap) (dat klopt dus wel)
+    //Ik had het gevoel alsof ik een fps cap had op 60 dus check dat hiermee. Meten is weten :D.
     const double frame_ms = 1000.0 / ImGui::GetIO().Framerate;
     ImGui::Begin("Timings");
     ImGui::Text("Frame:        %.2f ms (%.0f fps)", frame_ms, ImGui::GetIO().Framerate);
@@ -508,8 +495,8 @@ void Scene::draw()
 
 namespace
 {
-    constexpr int    MAX_STAT = 1000;       // Health en mana lopen van 0 t/m 1000
-    constexpr double REFRESH_INTERVAL = 0.25; // Hoe vaak (in seconden) de lijst opnieuw gesorteerd wordt
+    constexpr int    MAX_STAT = 1000;       
+    constexpr double REFRESH_INTERVAL = 0.25; // Hoe vaak (in seconden) de lijst opnieuw gesorteerd wordt in plaats van ieder frame.
 
     struct StatCache
     {
@@ -517,7 +504,7 @@ namespace
         double last_update = -1.0;
     };
 
-    // Counting sort op een vaste range: O(n + 1000), geen vergelijkingen nodig.
+    // Counting sort op een vaste range: O(n + 1000), geen vergelijkingen nodig oftewel sneller :D.
     template <typename Getter>
     void rebuild_sorted(const std::vector<Hero>& heroes, Getter get_value, std::vector<int>& out)
     {
@@ -599,117 +586,45 @@ void Scene::show_mana_values() const
         heroes, [](const Hero& h) { return h.get_mana(); }, cache);
 }
 
-
-
-
-void quick_sort_recursive(std::vector<int>& arr, int low, int high)
-{
-    if (low >= high) return;
-
-    // Kies het midden als pivot (voorkomt O(N^2) bij al gesorteerde data)
-    int pivot = arr[low + (high - low) / 2];
-    int i = low;
-    int j = high;
-
-    while (i <= j)
-    {
-        while (arr[i] < pivot) i++;
-        while (arr[j] > pivot) j--;
-
-        if (i <= j)
-        {
-            std::swap(arr[i], arr[j]);
-            i++;
-            j--;
-        }
-    }
-
-    if (low < j) quick_sort_recursive(arr, low, j);
-    if (i < high) quick_sort_recursive(arr, i, high);
-}
-
-std::vector<int> Scene::sort(const std::vector<int>& to_sort) const //Een sorteer algoritme, deze kan waarschijnlijk beter/geschikter BigO = O(n^2)
+//Sorteerfunctie Counting Sort
+std::vector<int> Scene::sort(const std::vector<int>& to_sort) const 
 {   
+    // Counting Sort is een algoritme dat niet de waarden vergelijkt met elkaar maar door te tellen hoe vaak elke waarde voorkomt.
+    // Deze is lineair wat het wel een stuk sneller maakt dan vele anderen. O(n)
     if (to_sort.empty()) return to_sort;
-
-    std::string sorteeralgoritme = "counting";
     std::vector<int> sorted_list = to_sort;
 
-    if (sorteeralgoritme == "insert") {
-        //Orginele sorteeralgoritme: Insertion Sort
-        //summary
-        //  Dit algoritme pakt een element, checkt alle volgende elementen tot het element erna groter is dan het element dat het vast pakt en plaatst het ervoor.
-        //summary
-
-        for (size_t i = 0; i < sorted_list.size(); i++)
-        {
-            int current_value = sorted_list.at(i);
-
-            //For all values before the current index,
-            //move all bigger values than current value one index forward
-            size_t j = i;
-            for (; j > 0 && sorted_list.at(j - 1) > current_value; j--)
-            {
-                sorted_list.at(j) = sorted_list.at(j - 1);
-            }
-            //Place the current value in the created gap
-            sorted_list.at(j) = current_value;
-        }
-
-        return sorted_list;
+    // Zoek de kleinste en grootste waarde in de lijst
+    int min_val = to_sort[0]; 
+    int max_val = to_sort[0]; 
+    for (int val : to_sort)
+    {
+        if (val < min_val) min_val = val;
+        if (val > max_val) max_val = val;
     }
-    else if (sorteeralgoritme == "quick") {
-        //summary
-        // Quick Sort of ... is een sorteeralgoritme dat een willekeurig (midden)punt pakt (pivot) 
-        // en de hogere elementen aan de ene kant plaatst en de lagere aan de andere kant.
-        // Deze is het snelst als de set al een beetje op volgorde is en het traagst als dat helemaal niet zo is.
-        // Ook is dit algorite recursief wat het dus trager maakt dan bijvoorbeeld lineaire algoritmen.
-        //summary
-        quick_sort_recursive(sorted_list, 0, static_cast<int>(sorted_list.size()) - 1);
-        return sorted_list;
+
+    // Maak een frequentietabel (hoe vaak komt elke HP/Mana waarde voor?)
+    int range = max_val - min_val + 1; 
+    std::vector<int> count(range, 0);
+
+    for (int val : to_sort)
+    {
+        count[val - min_val]++;
     }
-    else if (sorteeralgoritme == "counting") {
-        //summary
-        // Counting Sort is een algoritme dat niet de waarden vergelijkt met elkaar maar door te tellen hoe vaak elke waarde voorkomt.
-        // Deze is lineair wat het wel een stuk sneller maakt dan vele anderen.
-        //summary
 
-        // Zoek de kleinste en grootste waarde in de lijst
-        int min_val = to_sort[0]; //Minimum
-        int max_val = to_sort[0]; //Maximum
-        for (int val : to_sort)
+    // Bouw de gesorteerde lijst op
+    sorted_list.clear();
+    sorted_list.reserve(to_sort.size());
+
+    for (int i = 0; i < range; ++i)
+    {
+        while (count[i] > 0)
         {
-            if (val < min_val) min_val = val;
-            if (val > max_val) max_val = val;
+            sorted_list.push_back(i + min_val);
+            count[i]--;
         }
-
-        // Maak een frequentietabel (hoe vaak komt elke HP/Mana waarde voor?)
-        int range = max_val - min_val + 1; //hoeveel verschillende waarden komen er voor
-        std::vector<int> count(range, 0); //tel dezen
-
-        for (int val : to_sort) //voor iedere waarde(val) in de ongesorteerde lijst
-        {
-            count[val - min_val]++; //tel 1 keer een unieke waarde
-        }
-
-        // Bouw de gesorteerde lijst op
-        //std::vector<int> sorted_list; //definieer nieuwe lijst
-        sorted_list.clear();
-        sorted_list.reserve(to_sort.size()); //De grootte van de lijst staat gelijk aan de aantal elementen van to_sort
-
-        for (int i = 0; i < range; ++i)
-        {
-            while (count[i] > 0)
-            {
-                sorted_list.push_back(i + min_val);
-                count[i]--;
-            }
-        }
-
-        return sorted_list;
     }
     return sorted_list;
-
 }
 
 void Scene::handle_input(const float delta_time)

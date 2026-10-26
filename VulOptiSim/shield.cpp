@@ -11,8 +11,7 @@ namespace
     }
 }
 
-Shield::Shield(const std::string& texture_array_name, const std::vector<Hero>& heroes) //Constructor
-    : texture_name(texture_array_name)
+Shield::Shield(const std::string& texture_array_name, const std::vector<Hero>& heroes) : texture_name(texture_array_name)
 {
     //Gather all hero positions if they have mana left
     std::vector<glm::vec3> points;
@@ -57,13 +56,12 @@ Shield::Shield(const std::string& texture_array_name, const std::vector<Hero>& h
     min_height = lowest_point;
     max_height = highest_point;
 
-    convex_hull_points = convex_hull(points_2d); //Alle punten van de convex hull of alleen de buitenste?
-
-    //Make the shield a bit larger so it doesn't clip the heroes (Klinkt goed laten we dat even controlleren)
+    convex_hull_points = convex_hull(points_2d);
     grow_from_centroid();
 }
 
-void Shield::draw(vulvox::Renderer* renderer) const //Deze shield is een convex hull rondom alle Frieren heen. Zou deze beter kunnen? Ik denk t wel. (hoeft dit wel iedere keer of kan ik ook de hull groter maken en minder vaak aanroepen?)
+//Tekent de shield op de lijn van de convex hull
+void Shield::draw(vulvox::Renderer* renderer) const
 {
     if (convex_hull_points.size() <= 1)
     {
@@ -114,7 +112,7 @@ void Shield::draw(vulvox::Renderer* renderer) const //Deze shield is een convex 
     renderer->draw_planes(texture_name, transforms, texture_indices, uvs);
 }
 
-//Het nieuwe algoritme voor de convex hull. Gebasseerd op monotone chain.
+// Aangepaste convex hull algoritme. Gebasseerd op monotone chain.
 std::vector<glm::vec2> Shield::convex_hull(std::vector<glm::vec2> all_points) const
 {
     if (all_points.size() < 3)
@@ -122,7 +120,7 @@ std::vector<glm::vec2> Shield::convex_hull(std::vector<glm::vec2> all_points) co
         return all_points;
     }
 
-    //Gooi punten weg die zeker binnen de hull liggen. (alles binnen de 4 uitersten) (Akl-Toussaint) ---
+    // Gooi punten weg die zeker binnen de hull liggen. (alles binnen de 4 uitersten op de x en y as 2d) (Akl-Toussaint)
     glm::vec2 left = all_points[0], bottom = left, right = left, top = left;
     for (const glm::vec2& p : all_points)
     {
@@ -147,7 +145,7 @@ std::vector<glm::vec2> Shield::convex_hull(std::vector<glm::vec2> all_points) co
         }
     }
 
-    //Andrew's monotone chain op de overgebleven punten ---
+    //Andrew's monotone chain op de overgebleven punten
     std::sort(candidates.begin(), candidates.end(), [](const glm::vec2& a, const glm::vec2& b)
         {
             return a.x < b.x || (a.x == b.x && a.y < b.y);
@@ -176,7 +174,8 @@ std::vector<glm::vec2> Shield::convex_hull(std::vector<glm::vec2> all_points) co
         hull[k++] = candidates[i - 1];
     }
 
-    hull.resize(k - 1); // Het laatste punt is gelijk aan het eerste
+    // Het laatste punt is gelijk aan het eerste
+    hull.resize(k - 1); 
 
     //Zelfde draairichting als de oude Jarvis-march (die vertrouwde op orientation())
     if (hull.size() >= 3 && orientation(hull[0], hull[1], hull[2]) < 0.f)
@@ -185,58 +184,6 @@ std::vector<glm::vec2> Shield::convex_hull(std::vector<glm::vec2> all_points) co
     }
 
     return hull;
-}
-
-//Het oude gift wrapping convex hull algoritme. Deze wordt vervangen door een ander.
-std::vector<glm::vec2> Shield::convex_hull_gift_wrapping (std::vector<glm::vec2> all_points) const
-{
-    all_points.erase(std::ranges::unique(all_points, [](const glm::vec2& a, const glm::vec2& b)
-        {
-            //To prevent float rounding errors use epsilon (removes points nearly on top of each other)
-            return glm::abs(a.x - b.x) < 0.001f && glm::abs(a.y - b.y) < 0.001f;
-        }).begin(), all_points.end());
-
-    glm::vec2 point_on_hull = all_points.at(0);
-
-    //Find left most position, when equal, select lowest y
-    for (const glm::vec2& point : all_points)
-    {
-        if (point.x < point_on_hull.x || (point.x == point_on_hull.x && point.y < point_on_hull.y))
-        {
-            point_on_hull = point;
-        }
-    }
-
-    std::vector<glm::vec2> forcefield_hull;
-
-    while (true)
-    {
-        //Add last found point
-        forcefield_hull.push_back(point_on_hull);
-
-        //Loop through all points replacing the endpoint with the current iteration every time 
-        //it lies left of the current segment formed by point_on_hull and the current endpoint.
-        //By the end we have a segment with no points on the left and thus a point on the convex hull.
-        glm::vec2 endpoint = all_points.at(0);
-        for (const glm::vec2& point : all_points)
-        {
-            if ((endpoint == point_on_hull) || orientation(point_on_hull, endpoint, point) < 0.f)
-            {
-                endpoint = point;
-            }
-        }
-
-        //Set the starting point of the next segment to the found endpoint.
-        point_on_hull = endpoint;
-
-        //If we went all the way around we are done.
-        if (endpoint == forcefield_hull.at(0))
-        {
-            break;
-        }
-    }
-
-    return forcefield_hull;
 }
 
 bool Shield::intersects(const glm::vec2& circle_center, float radius) const
@@ -321,12 +268,13 @@ glm::vec2 Shield::calculate_centroid()
     return sum / static_cast<float>(convex_hull_points.size());
 }
 
-void Shield::grow_from_centroid() //Vergroot de centroid zodat de shield niet in contact staat met de punten in de convexhull
+//Vergroot de centroid zodat de shield niet in contact staat met de punten in de convexhull en de projectielen de heroes kunnen raken door de breedte van de hero
+void Shield::grow_from_centroid() 
 {
     //Push out the convex hull away from its centroid by a unit vector
     glm::vec2 centroid = calculate_centroid();
 
-    for (auto& convex_point : convex_hull_points) //Door alle punten heen? Dat is best veel en best vaak (9000 keer iedere frame tenzij alleen de buitenste zijn)
+    for (auto& convex_point : convex_hull_points) 
     {
         glm::vec2 grow_vector = glm::normalize(convex_point - centroid);
         convex_point += 2.f * grow_vector;

@@ -17,6 +17,7 @@ void Projectile::update(const float delta_time, const Camera& camera, const Shie
 {
     if (active)
     {
+        // Werk de explosie af voordat het projectiel wordt uitgeschakeld.
         if (exploding)
         {
             explosion_timer += delta_time;
@@ -37,6 +38,7 @@ void Projectile::update(const float delta_time, const Camera& camera, const Shie
             return;
         }
 
+        // Pas de vliegrichting aan zolang het doel beschikbaar is.
         if (target)
         {
             direction = glm::normalize(target->get_position() - transform.position);
@@ -48,7 +50,7 @@ void Projectile::update(const float delta_time, const Camera& camera, const Shie
 
         animation_timer.update(delta_time);
 
-        //Disable if the projectile collides with the shield
+        // Het schild absorbeert het projectiel en verbruikt mana.
         if (shield.intersects(transform.get_position2d(), radius))
         {
             Log::get_instance()->add_log("The projectile hits the shield, draining mana.\n");
@@ -91,6 +93,7 @@ void Projectile::check_collisions(std::vector<Hero>& heroes, const HeroPositions
 
 void Projectile::explode(std::vector<Hero>& heroes, const HeroPositions& hero_positions)
 {
+    // Controleer welke helden binnen de explosieradius vallen.
     const float reach = explosion_radius + hero_positions.max_radius + 0.01f;
     const float reach_sq = reach * reach;
 
@@ -112,7 +115,7 @@ void Projectile::explode(std::vector<Hero>& heroes, const HeroPositions& hero_po
 
     exploding = true;
     explosion_timer = 0.f;
-    transform.scale = glm::vec3(explosion_radius * 2.f); // pas de grootte aan naar smaak
+    transform.scale = glm::vec3(explosion_radius * 2.f);
 }
 
 void Projectile::register_draw(Sprite_Manager<Projectile>& sprite_manager) const
@@ -123,15 +126,9 @@ void Projectile::register_draw(Sprite_Manager<Projectile>& sprite_manager) const
     }
 }
 
-glm::mat4 Projectile::get_model_matrix() const
-{
-    return transform.get_matrix();
-}
+glm::mat4 Projectile::get_model_matrix() const{return transform.get_matrix();}
 
-glm::uint32_t Projectile::get_texture_index() const
-{
-    return animation_timer.get_current_frame();
-}
+glm::uint32_t Projectile::get_texture_index() const{return animation_timer.get_current_frame();}
 
 
 void Projectile::rotate_to_camera(const Camera& camera)
@@ -152,21 +149,4 @@ void Projectile::rotate_to_camera(const Camera& camera)
 
 
     transform.rotation = rotate_to_camera * rotate_to_target;
-
-
-
-    //glm::vec3 facing_direction = glm::normalize(camera.get_position() - transform.position);
-
-
-
-    //glm::vec3 facing_direction = glm::normalize(camera.get_position() - transform.position);
-
-    //glm::vec3 rotation_axis = glm::normalize(direction);
-
-    //float angle = acosf(glm::dot(glm::vec3(0, 1, 0), facing_direction));
-
-    //glm::mat4 rotation = glm::rotate(glm::mat4(1.0f), angle, rotation_axis);
-
-    //transform.rotation = rotation;
-
 }

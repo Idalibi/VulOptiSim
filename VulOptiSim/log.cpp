@@ -13,7 +13,7 @@ Log* Log::get_instance()
 {
     if (!log_instance)
     {
-        log_instance = std::unique_ptr<Log>(new Log()); //Smart pointer die een nieuwe log maakt, check of deze ook verwijdert moet worden of niet
+        log_instance = std::unique_ptr<Log>(new Log()); //Smart pointer die een nieuwe log maakt(singleton)
     }
 
     return log_instance.get();
@@ -26,9 +26,11 @@ void Log::clear()
     line_offsets.push_back(0);
 }
 
-void Log::add_log(const char* fmt, ...) IM_FMTARGS(2) //Deze log moet misschien iets beter, er worden nu eindeloos veel logs toegevoegd aan het schermpje
+void Log::add_log(const char* fmt, ...) IM_FMTARGS(2)
 {
+    // Voeg het nieuwe bericht toe en registreer de beginpositie van elke regel.
     int old_size = text_buffer.size();
+
     va_list args;
     va_start(args, fmt);
     text_buffer.appendfv(fmt, args);
@@ -88,6 +90,7 @@ void Log::draw(const char* title, bool* p_open)
         const char* buf = text_buffer.begin();
         const char* buf_end = text_buffer.end();
 
+        // Toon alleen regels die aan het filter voldoen.
         if (text_filter.IsActive())
         {
             for (int line_no = 0; line_no < line_offsets.Size; line_no++)
@@ -100,6 +103,7 @@ void Log::draw(const char* title, bool* p_open)
         }
         else
         {
+            // Beperk het aantal getekende regels voor betere prestaties.
             ImGuiListClipper clipper;
             clipper.Begin(line_offsets.Size);
             while (clipper.Step())

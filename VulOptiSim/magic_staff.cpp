@@ -72,6 +72,7 @@ Hero* Magic_Staff::find_closest_target(std::vector<Hero>& heroes) const
 
     float closest_distance_squared = std::numeric_limits<float>::max();
 
+    // Zoek de dichtstbijzijnde actieve held zonder de vierkantswortel te berekenen.
     for (auto& hero : heroes)
     {
         if (!hero.is_active())
@@ -79,7 +80,7 @@ Hero* Magic_Staff::find_closest_target(std::vector<Hero>& heroes) const
             continue;
         }
 
-        float distance_squared = glm::length2(hero.get_position2d() - transform.get_position2d()); // Use squared distance to avoid sqrt
+        float distance_squared = glm::length2(hero.get_position2d() - transform.get_position2d()); 
 
         if (distance_squared < closest_distance_squared)
         {
